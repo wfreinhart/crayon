@@ -57,6 +57,9 @@ class TestPyGraph(unittest.TestCase):
                             / np.log(np.amax(np.vstack((A_gdv[l],B_gdv[m])),0)+2.)
                         S[l,m] = 1. - np.sum( D ) / np.sum( w )
                 np.testing.assert_array_almost_equal(np.sort(V.flatten()),np.sort(S.flatten()),3)
+                # test comparitor
+                T = crayon.gdvs(a,b)
+                np.testing.assert_array_almost_equal(S,T,6)
                 # test gdd agreement
                 gdda = np.loadtxt('/home/wfr/crayon/test/gdda/gdda-%d-%d.txt'%(idx,jdx))
                 n = np.max((A_gdd.shape[1],B_gdd.shape[1]))
@@ -80,6 +83,9 @@ class TestPyGraph(unittest.TestCase):
                     N_B[k,:] = S_B[k,:] / T_B[k]
                 Aj = 1. - 1./np.sqrt(2)*np.sum((N_A-N_B)**2.,1)**0.5
                 np.testing.assert_array_almost_equal(gdda,Aj,3)
+                # test comparitor
+                D = crayon.gdda(a,b)
+                np.testing.assert_array_almost_equal(Aj,D.flatten(),6)
 
 if __name__ == "__main__":
     unittest.main()

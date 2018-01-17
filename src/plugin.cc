@@ -11,6 +11,7 @@
 #include "crayon.h"
 
 #include "PyGraph.h"
+#include "Comparison.h"
 
 PYBIND11_MODULE(crayon, m)
     {
@@ -22,6 +23,7 @@ PYBIND11_MODULE(crayon, m)
 
         // export to python via pybind11
         export_PyGraph(m);
+        export_Comparison(m);
 
         } // end namespace crayon
     }

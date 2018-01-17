@@ -11,9 +11,11 @@
 #include <graph/EdgeVisitor.hpp>
 
 #include <orca/Orca.hpp>
-#include <orca/Graph.hpp>
+#include <Graph.hpp>
 
 #include <libgraphlet/GDD.hpp>
+
+#define GRAPHLET_SIZE 5
 
 namespace crayon
     {
@@ -44,8 +46,6 @@ namespace crayon
         bool computed_gdv_ = false;
         Eigen::MatrixXi GDD_;
         bool computed_gdd_ = false;
-        // parameters
-        unsigned int graphlet_size_ = 5;
         };
 
     void export_PyGraph(pybind11::module& m);
