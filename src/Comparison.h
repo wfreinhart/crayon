@@ -12,7 +12,7 @@ namespace crayon
 {
 
 Eigen::MatrixXd GDVSimilarity(PyGraph &A, PyGraph &B);
-Eigen::MatrixXd GDDAgreement(PyGraph &A, PyGraph &B);
+Eigen::VectorXd GDDAgreement(PyGraph &A, PyGraph &B);
 
 void export_Comparison(pybind11::module& m);
 

@@ -85,7 +85,7 @@ class TestPyGraph(unittest.TestCase):
                 np.testing.assert_array_almost_equal(gdda,Aj,3)
                 # test comparitor
                 D = crayon.gdda(a,b)
-                np.testing.assert_array_almost_equal(Aj,D.flatten(),6)
+                np.testing.assert_array_almost_equal(Aj,D,6)
 
 if __name__ == "__main__":
     unittest.main()

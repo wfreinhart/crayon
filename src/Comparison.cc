@@ -50,7 +50,7 @@ Eigen::MatrixXd GDVSimilarity(PyGraph &A, PyGraph &B)
     return S;
     }
 
-Eigen::MatrixXd GDDAgreement(PyGraph &A, PyGraph &B)
+Eigen::VectorXd GDDAgreement(PyGraph &A, PyGraph &B)
     {
     const unsigned int n = orca::ORBITS[GRAPHLET_SIZE];
     // fetch the GDDs from the graph objects
@@ -60,7 +60,6 @@ Eigen::MatrixXd GDDAgreement(PyGraph &A, PyGraph &B)
     unsigned int w = std::max(A_gdd.cols(),B_gdd.cols());
     Eigen::MatrixXd N_A = Eigen::MatrixXd::Zero(n,w);
     Eigen::MatrixXd N_B = Eigen::MatrixXd::Zero(n,w);
-    std::cout << n << " x " << w << std::endl;
     // normalize by degree and graphlet area
     for( unsigned int i = 0; i < n; i++ )
         {
@@ -68,17 +67,23 @@ Eigen::MatrixXd GDDAgreement(PyGraph &A, PyGraph &B)
         double bS = 0.;
         for( unsigned int j = 1; j < w; j++ )
             {
-            double a = double(A_gdd(i,j)) / double(j);
-            N_A(i,j) = a;
-            aS += a;
-            double b = double(B_gdd(i,j)) / double(j);
-            N_B(i,j) = b;
-            bS += b;
+            if( j < A_gdd.cols() )
+                {
+                double a = double(A_gdd(i,j)) / double(j);
+                N_A(i,j) = a;
+                aS += a;
+                }
+            if( j < B_gdd.cols() )
+                {
+                double b = double(B_gdd(i,j)) / double(j);
+                N_B(i,j) = b;
+                bS += b;
+                }
             }
         if( aS > 0. ) N_A.row(i) /= aS;
         if( bS > 0. ) N_B.row(i) /= bS;
         }
-    Eigen::MatrixXd Aj(1,n);
+    Eigen::VectorXd Aj(n);
     for( unsigned int k = 0; k < n; k++ )
         {
         double delta = 0.;
@@ -87,7 +92,7 @@ Eigen::MatrixXd GDDAgreement(PyGraph &A, PyGraph &B)
             double d = ( N_A(k,j) - N_B(k,j) );
             delta += d * d;
             }
-        Aj(0,k) = 1. - 1. / sqrt(2.) * sqrt(delta);
+        Aj(k) = 1. - 1. / sqrt(2.) * sqrt(delta);
         }
     return Aj;
     }
