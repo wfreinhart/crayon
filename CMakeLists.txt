@@ -23,6 +23,7 @@ include_directories(${PROJECT_SOURCE_DIR}/pybind11/include)
 include_directories(${PROJECT_SOURCE_DIR}/eigen)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/include)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/libgraph/include)
+include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/src)
 
 # build orca library
 file(GLOB SRC_ORCA "libgraphlet/src/orca/Orca.cpp")

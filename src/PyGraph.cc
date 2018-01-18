@@ -45,7 +45,7 @@ void PyGraph::build()
     remove_edge_loops(G_);
     std::vector<std::pair<size_t,size_t>> edges;
     get_edges(G_, edges);
-    O_.reset(new orca::Orca(num_vertices(G_), edges, graphlet_size_));
+    O_.reset(new orca::Orca(num_vertices(G_), edges, GRAPHLET_SIZE));
     O_->compute();
     }
 
@@ -58,11 +58,11 @@ Eigen::MatrixXi PyGraph::getGDV()
 void PyGraph::computeGDV()
     {
     // compute gdv with orca and convert to numpy-readable vector
-    GDV_ = Eigen::MatrixXi::Zero(num_vertices(G_), orca::ORBITS[graphlet_size_]);
+    GDV_ = Eigen::MatrixXi::Zero(num_vertices(G_), orca::ORBITS[GRAPHLET_SIZE]);
     const boost::numeric::ublas::matrix<int64_t> orbits = O_->getOrbits();
     for( unsigned int i = 0; i < num_vertices(G_); i++ )
         {
-        for( unsigned int j = 0; j < orca::ORBITS[graphlet_size_]; j++ )
+        for( unsigned int j = 0; j < orca::ORBITS[GRAPHLET_SIZE]; j++ )
             {
             GDV_(i,j) = int(orbits(i,j));
             }
