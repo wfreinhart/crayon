@@ -1,3 +1,10 @@
+//
+// Comparison.cc
+// provides functions for pairwise comparison of GDVs and GDDs
+//
+// Copyright (c) 2018 Wesley Reinhart.
+// This file is part of the crayon project, released under the Modified BSD License.
+
 #include "Comparison.h"
 
 namespace crayon

@@ -1,3 +1,10 @@
+#
+# graphs.py
+# provides sample graphs for validation testing
+#
+# Copyright (c) 2018 Wesley Reinhart.
+# This file is part of the crayon project, released under the Modified BSD License.
+
 import numpy as np
 
 o = np.array([1, 2, 2, 2, 3, 4, 3, 3, 4, 3,

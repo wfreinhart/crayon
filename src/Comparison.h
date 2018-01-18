@@ -1,3 +1,10 @@
+//
+// Comparison.h
+// provides functions for pairwise comparison of GDVs and GDDs
+//
+// Copyright (c) 2018 Wesley Reinhart.
+// This file is part of the crayon project, released under the Modified BSD License.
+
 #ifndef SRC_COMPARISON_H_
 #define SRC_COMPARISON_H_
 

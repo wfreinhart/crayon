@@ -1,3 +1,10 @@
+#
+# utils.py
+# provides utility functions for handling libgraphlet output
+#
+# Copyright (c) 2018 Wesley Reinhart.
+# This file is part of the crayon project, released under the Modified BSD License.
+
 import numpy as np
 
 def load_uneven(filename):

@@ -1,5 +1,5 @@
 //
-// plugin.cpp
+// plugin.cc
 // pybind11 plugin to interface with relevant C++ codes
 //
 // Copyright (c) 2018 Wesley Reinhart.

@@ -1,3 +1,10 @@
+#
+# CMakeLists.txt
+# CMake directives for compiling crayon
+#
+# Copyright (c) 2018 Wesley Reinhart.
+# This file is part of the crayon project, released under the Modified BSD License.
+
 cmake_minimum_required(VERSION 3.1)
 
 project(crayon)
@@ -45,3 +52,19 @@ target_link_libraries(crayon
 
 set_target_properties(crayon PROPERTIES PREFIX "")
 set_target_properties(crayon PROPERTIES SUFFIX ".so")
+
+#==================================================
+# testing suite
+#--------------------------------------------------
+enable_testing()
+# generate list of tests
+execute_process(COMMAND "${PYTHON_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/test/list_test.py"
+                OUTPUT_VARIABLE STR_TESTS
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_STRIP_TRAILING_WHITESPACE)
+# split the list
+separate_arguments(TEST_LIST UNIX_COMMAND ${STR_TESTS})
+# save for 'make test'
+foreach(TEST ${TEST_LIST})
+    add_test(${TEST} "${PYTHON_EXECUTABLE}" ${TEST})
+endforeach(TEST)

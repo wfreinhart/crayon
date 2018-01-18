@@ -1,3 +1,10 @@
+//
+// Crayon.h
+// declares crayon version
+//
+// Copyright (c) 2018 Wesley Reinhart.
+// This file is part of the crayon project, released under the Modified BSD License.
+
 #ifndef SRC_CRAYON_H_
 #define SRC_CRAYON_H_
 
