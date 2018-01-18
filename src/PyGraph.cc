@@ -1,3 +1,10 @@
+//
+// PyGraph.cc
+// wraps the libgraphlet/Orca calculation of GDVs and GDDs
+//
+// Copyright (c) 2018 Wesley Reinhart.
+// This file is part of the crayon project, released under the Modified BSD License.
+
 #include "PyGraph.h"
 
 namespace crayon
