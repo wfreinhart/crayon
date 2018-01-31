@@ -23,8 +23,6 @@ class Graph:
         A (array-like): adjacency matrix defining the neighborhood graph
     """
     def __init__(self,A):
-        self.build(A)
-    def build(self,A):
         # instantiate a Crayon::Graph object
         self.C = _crayon.graph(A)
         self.adj = self.C.adj()
@@ -41,46 +39,72 @@ class Graph:
         """
         return emd(self.ngdv,other.ngdv)
     def __eq__(self,other):
-        R""" logical comparison between this and another Graph; checks if A - B == 0
+        R""" equality comparison between this and another Graph; checks if A - B == 0
         """
         return (self - other == 0.)
+    def __ne__(self,other):
+        R""" inequality comparison between this and another Graph; checks if A - B > 0
+        """
+        return (self - other > 0.)
     def __str__(self):
         R""" hashable representation of the Graph, using the Graphlet Degree Distribution
         """
-        return str(self.gdd.tolist())
+        s_nodes = str(len(self.adj))
+        s_edges = str(np.sum(self.adj))
+        s_gdd = str(self.gdd.tolist())
+        return '%s:%s:%s'%(s_nodes,s_edges,s_gdd)
 
 class GraphLibrary:
+    R""" handles sets of graphs from snapshots and ensembles of snapshots
+
+    Args:
+        (None)
+    """
     def __init__(self):
-        self.library = {}
-        self.index_map = {}
-    def encounter(self,key,entry):
-        sig = key
-        G = entry['graph']
-        C = entry['count']
-        sigs = np.asarray(self.library.keys(),dtype=np.str)
-        match = np.argwhere( sigs == sig ).flatten()
-        # match = [s for s in self.library.keys() if s == sig]
-        # check graphs with matching GDD for true (GDV-EMD) equivalence
+        self.graphs = {}
+        self.counts = {}
+        self.index = {}
+    def encounter(self,G,count=1):
+        R""" adds a Graph object to the library and returns its index
+
+        Args:
+            sig (str): hashable signature of the graph
+            g (Graph): Graph object to consider
+            c (int): count to add to the library (i.e., number of observations from a Snapshot)
+
+        Returns:
+            idx (int): the index of this Graph (signature) in the library
+        """
+        sig = str(G)
         idx = None
-        for m in match:
-            if self.library[sigs[m]]['graph'] == G:
-                idx = m
-                self.library[sigs[m]]['count'] += C
-                break
-        if idx is None:
-            self.library[sig] = {'graph': G, 'count': C}
-            idx = len(sigs)
-            self.index_map[idx] = sig
-        return idx
+        try:
+            self.counts[sig] += count
+        except:
+            self.index[sig] = len(self.graphs)
+            self.graphs[sig] = G
+            self.counts[sig] = count
+        if self.graphs[sig] != G:
+            print(G.adj)
+            print(self.graphs[sig].adj)
+            print(self.graphs[sig] - G)
+            raise RuntimeError('Found degenerate GDD: \n%s\n'%sig)
+        return self.index[sig]
     def collect(self,others):
+        R""" merges other GraphLibrary objects into this one
+
+        Args:
+            others (list of GraphLibrary): GraphLibrary objects to merge into this one
+        """
         if type(others) != list:
             others = list([others])
+        if type(others[0]) != type(GraphLibrary()):
+            raise TypeError('GraphLibrary.collect expects a list of GraphLibrary objects')
         # iterate over supplied library instances
         for other in others:
-            for key in other:
-                self.encounter(key,other[key])
+            for sig in other.graphs.keys():
+                self.encounter(other.graphs[sig],count=other.counts[sig])
 
-class Snapshot(GraphLibrary):
+class Snapshot:
     R""" identifies neighborhoods from simulation snapshot
 
     Args:
@@ -122,8 +146,7 @@ class Snapshot(GraphLibrary):
         self.NL = AdaptiveCNA(self)
         # self.NL = Voronoi(self)
         self.NN = None
-        self.library = {}
-        self.index_map = {}
+        self.library = GraphLibrary()
         self.graph_index = np.zeros(self.N) - 1
     def getNeighborhoods(self):
         if self.NL.neighbors is None:
@@ -133,19 +156,16 @@ class Snapshot(GraphLibrary):
             self.NN.append(neighborsToAdjacency(i,self.NL.neighbors))
         return self.NN
     def buildLibrary(self):
+        R""" constructs neighborhood Graphs from nearest neighbors of all particles and adds them
+             to a Snapshot-specific GraphLibrary
+        """
         if self.NN is None:
             self.getNeighborhoods()
-        self.graphs = {}
-        self.counts = {}
-        self.graph_index = np.zeros(self.N)
         # build graphs from neighborhoods
         for i in range(self.N):
             G = Graph(self.NN[i])
-            key = str(G)
-            entry = {'graph': G, 'count': 1}
-            self.graph_index[i] = self.encounter(key,entry)
+            self.graph_index[i] = self.library.encounter(G)
 
-class Ensemble(GraphLibrary):
+class Ensemble:
     def __init__(self):
-        self.library = {}
-        self.index_map = {}
+        self.library = GraphLibrary()
