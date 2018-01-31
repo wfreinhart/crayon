@@ -13,7 +13,7 @@ build_path = os.getcwd()
 
 import sys
 sys.path.insert(0,build_path)
-import crayon
+import _crayon
 
 sys.path.insert(0,test_path)
 from validation_graphs import *
@@ -24,7 +24,7 @@ import unittest
 class ValidateComparison(unittest.TestCase):
     # run this every time
     def setUp(self):
-        self.aList = [crayon.graph(A) for A in AList]
+        self.aList = [_crayon.graph(A) for A in AList]
 
     # test pairwise GDV similarity validity
     def testValidateGDVS(self):
@@ -50,7 +50,7 @@ class ValidateComparison(unittest.TestCase):
                 #       we can only check that the set of values match...
                 np.testing.assert_array_almost_equal(np.sort(V.flatten()),np.sort(S.flatten()),3)
                 # test comparitor against calculated values
-                T = crayon.gdvs(self.aList[i],self.aList[j])
+                T = _crayon.gdvs(self.aList[i],self.aList[j])
                 np.testing.assert_array_almost_equal(S,T,6)
 
     # test pairwise GDD agreement validity
@@ -84,7 +84,7 @@ class ValidateComparison(unittest.TestCase):
                 # test calculated values against libgraphlet
                 np.testing.assert_array_almost_equal(gdda,Aj,3)
                 # test comparitor against calculated values
-                D = crayon.gdda(self.aList[i],self.aList[j])
+                D = _crayon.gdda(self.aList[i],self.aList[j])
                 np.testing.assert_array_almost_equal(Aj,D,6)
 
 if __name__ == "__main__":

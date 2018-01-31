@@ -17,8 +17,14 @@ set(CMAKE_MODULE_PATH
 	"${CMAKE_MODULE_PATH}"
 	)
 
-message("cmake_module_path: ${CMAKE_MODULE_PATH}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3 -Wall")
+
+if( ${CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT} )
+    set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR} CACHE PATH "Install path prefix, prepended onto install directories." FORCE)
+    message("-- Default install prefix detected, will install to default location ${CMAKE_INSTALL_PREFIX}")
+else()
+    message("-- Will install to user-specified location ${CMAKE_INSTALL_PREFIX}")
+endif()
 
 find_package(PythonInterp REQUIRED)
 find_package(PythonLibsNew REQUIRED)
@@ -31,6 +37,16 @@ include_directories(${PROJECT_SOURCE_DIR}/eigen)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/include)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/libgraph/include)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/src)
+
+set(CRAYON_DEST "${CMAKE_INSTALL_PREFIX}/crayon")
+SET(CMAKE_SKIP_BUILD_RPATH FALSE)
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+SET(CMAKE_INSTALL_RPATH "${CRAYON_DEST}/lib")
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+LIST(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CRAYON_DEST}/lib" isSystemDir)
+IF("${isSystemDir}" STREQUAL "-1")
+   SET(CMAKE_INSTALL_RPATH "${CRAYON_DEST}/lib")
+ENDIF("${isSystemDir}" STREQUAL "-1")
 
 # build orca library
 file(GLOB SRC_ORCA "libgraphlet/src/orca/Orca.cpp")
@@ -49,9 +65,16 @@ target_link_libraries(crayon
                       orca
                       graphlet
 )
-
-set_target_properties(crayon PROPERTIES PREFIX "")
+set_target_properties(crayon PROPERTIES PREFIX "_")
 set_target_properties(crayon PROPERTIES SUFFIX ".so")
+
+# install C++ libraries
+install(TARGETS orca DESTINATION "${CRAYON_DEST}/lib")
+install(TARGETS graphlet DESTINATION "${CRAYON_DEST}/lib")
+install(TARGETS crayon DESTINATION ${CRAYON_DEST})
+# install python module
+file(GLOB SRC_PY "src/py/*.py")
+install(FILES ${SRC_PY} DESTINATION ${CRAYON_DEST})
 
 #==================================================
 # testing suite

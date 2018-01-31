@@ -13,9 +13,9 @@
 #include "PyGraph.h"
 #include "Comparison.h"
 
-PYBIND11_MODULE(crayon, m)
+PYBIND11_MODULE(_crayon, m)
     {
-    m.doc() = "a package for template-free crystal structure analysis";
+    m.doc() = "C++ bindings for crayon: a template-free crystal structure analysis";
     m.attr("__version__") = pybind11::make_tuple(CRAYON_VERSION_MAJOR, CRAYON_VERSION_MINOR, CRAYON_VERSION_PATCH);
 
         {

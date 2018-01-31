@@ -13,7 +13,7 @@ build_path = os.getcwd()
 
 import sys
 sys.path.insert(0,build_path)
-import crayon
+import _crayon
 
 sys.path.insert(0,test_path)
 from validation_graphs import *
@@ -24,7 +24,7 @@ import unittest
 class TestPyGraph(unittest.TestCase):
     # run this every time
     def setUp(self):
-        self.aList = [crayon.graph(A) for A in AList]
+        self.aList = [_crayon.graph(A) for A in AList]
 
     # test adjacency matrix assignment and retrieval
     def testAdj(self):
@@ -46,7 +46,7 @@ class TestPyGraph(unittest.TestCase):
 class ValidatePyGraph(unittest.TestCase):
     # run this every time
     def setUp(self):
-        self.aList = [crayon.graph(A) for A in AList]
+        self.aList = [_crayon.graph(A) for A in AList]
 
     # test GDV validity
     def testValidateGDV(self):
