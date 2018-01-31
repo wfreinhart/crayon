@@ -42,22 +42,22 @@ class NeighborList:
         self.neighbors = []
 
 class AdaptiveCNA(NeighborList):
-    def set_params(self,rmax=40.,max_nbr=16,strict_rcut=True,near_nbr=6,geoFactor=1.2071):
-        self.rmax = rmax
+    def set_params(self,r_max=40.,max_nbr=16,strict_rcut=True,near_nbr=6,geo_factor=1.2071):
+        self.r_max = r_max
         self.max_nbr = max_nbr
         self.strict_rcut = strict_rcut
         self.near_nbr = near_nbr
-        self.geoFactor = geoFactor
+        self.geo_factor = geo_factor
         if not foundFreud:
             raise RuntimeError('neighborlist.AdaptiveCNA requires freud')
     def build(self):
         self.f_box = freud.box.Box(Lx=self.snap.L[0],Ly=self.snap.L[1],Lz=self.snap.L[2],is2D=False)
-        self.f_nl  = freud.locality.NearestNeighbors(self.rmax,self.max_nbr,strict_cut=self.strict_rcut)
+        self.f_nl  = freud.locality.NearestNeighbors(self.r_max,self.max_nbr,strict_cut=self.strict_rcut)
         self.f_nl.compute(self.f_box,self.snap.xyz,self.snap.xyz)
         Rsq = self.f_nl.getRsqList()
         Rsq[Rsq < 0] = np.nan
         R6 = np.nanmean(Rsq[:,:self.near_nbr],axis=1)
-        Rcut = self.geoFactor**2. * R6
+        Rcut = self.geo_factor**2. * R6
         nl = self.f_nl.getNeighborList()
         self.neighbors = []
         for i in range(self.snap.N):

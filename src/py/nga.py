@@ -7,7 +7,9 @@
 
 from __future__ import print_function
 import sys
+import inspect
 import pickle
+import zlib
 
 from crayon import _crayon
 
@@ -52,7 +54,9 @@ class Graph:
         s_nodes = str(len(self.adj))
         s_edges = str(np.sum(self.adj))
         s_gdd = str(self.gdd.tolist())
-        return '%s:%s:%s'%(s_nodes,s_edges,s_gdd)
+        s = '%s:%s:%s'%(s_nodes,s_edges,s_gdd)
+        return s
+        # return zlib.compress(s)
 
 class GraphLibrary:
     R""" handles sets of graphs from snapshots and ensembles of snapshots
@@ -112,36 +116,36 @@ class Snapshot:
         L (array-like): box dimensions in x, y, z
         pbc (str): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,xyz=None,L=None,pbc='xyz'):
+    def __init__(self,xyz=None,L=None,pbc='xyz',nl_type='adaptiveCNA'):
         # check that variable types and sizes match expected
         if xyz is not None:
             try:
                 R = np.asarray(xyz)
             except:
-                raise Exception('Error: xyz must be array-like')
+                raise TypeError('Error: xyz must be array-like')
             if R.shape[1] != 3:
-                raise Exception('Error: xyz must have 3 columns')
+                raise ValueError('Error: xyz must have 3 columns')
         else:
-            raise Exception('Error: must provide xyz (array of particle coordinates)')
+            raise RuntimeError('Error: must provide xyz (array of particle coordinates)')
         self.xyz = xyz
         self.N = len(xyz)
         if L is not None:
             try:
                 L = np.asarray(L)
             except:
-                raise Exception('Error: L must be array-like')
+                raise TypeError('Error: L must be array-like')
             if len(L) != 3:
-                raise Exception('Error: L must have 3 elements')
+                raise ValueError('Error: L must have 3 elements')
         else:
-            raise Exception('Error: must provide L (box dimensions)')
+            raise RuntimeError('Error: must provide L (box dimensions)')
         self.L = L
         self.pbc = pbc
-        # nlAllowed = ['Delaunay','adaptiveCNA']
-        # if nlType not in nlAllowed:
-        #     raise Exception('Error: nlType must be one of the following: %s'%', '.join(nlAllowed))
-        # for p in periodic:
-        #     if p.lower() not in 'xyz':
-        #         raise Exception('Error: periodic boundary conditions must be combination of x, y, and z')
+        nlAllowed = ['delaunay','adaptivecna']
+        if nl_type.lower() not in nlAllowed:
+            raise ValueError('Error: nlType must be one of the following: %s'%', '.join(nlAllowed))
+        for p in pbc:
+            if p.lower() not in 'xyz':
+                raise ValueError('Error: periodic boundary conditions must be combination of x, y, and z')
         # assign snapshot data
         self.NL = AdaptiveCNA(self)
         # self.NL = Voronoi(self)
@@ -165,7 +169,30 @@ class Snapshot:
         for i in range(self.N):
             G = Graph(self.NN[i])
             self.graph_index[i] = self.library.encounter(G)
+    def save(self,filename,graphs=True,neighborhoods=True):
+        with open(filename,'wb') as fid:
+            buff = {}
+            if graphs:
+                buff['graph_adj'] = [g.adj for key, g in self.library.graphs.items()]
+                buff['graph_index'] = self.graph_index
+            if neighborhoods:
+                buff['NN'] = self.NN
+            pickle.dump(buff,fid)
+    def load(self,filename):
+        with open(filename,'rb') as fid:
+            buff = pickle.load(fid)
+            if 'graph_adj' in buff and 'graph_index' in buff:
+                self.graph_index = buff['graph_index']
+                for i, adj in enumerate(buff['graph_adj']):
+                    G = Graph(adj)
+                    sig = str(G)
+                    self.library.index[sig] = len(self.library.graphs)
+                    self.library.graphs[sig] = G
+                    self.library.counts[sig] = np.sum(self.graph_index == i)
+            if 'NN' in buff:
+                self.NN = buff['NN']
 
 class Ensemble:
     def __init__(self):
         self.library = GraphLibrary()
+        self.ldmap = dmap.DMap()
