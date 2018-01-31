@@ -5,10 +5,14 @@
 # Copyright (c) 2018 Wesley Reinhart.
 # This file is part of the crayon project, released under the Modified BSD License.
 
-from mpi4py import MPI
 import sys
 import math
 import time
+
+try:
+    from mpi4py import MPI
+except:
+    raise RuntimeError('crayon.parallel requires mpi4py')
 
 def info():
     comm = MPI.COMM_WORLD
