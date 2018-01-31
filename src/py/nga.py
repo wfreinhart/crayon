@@ -68,7 +68,13 @@ class GraphLibrary:
         self.graphs = {}
         self.counts = {}
         self.index = {}
-    def encounter(self,G,count=1):
+    def find(self,G):
+        sig = str(G)
+        try:
+            return self.index[sig]
+        except:
+            return None
+    def encounter(self,G,count=1,add=True):
         R""" adds a Graph object to the library and returns its index
 
         Args:
@@ -93,7 +99,7 @@ class GraphLibrary:
             print(self.graphs[sig] - G)
             raise RuntimeError('Found degenerate GDD: \n%s\n'%sig)
         return self.index[sig]
-    def collect(self,others):
+    def collect(self,others,counts=True):
         R""" merges other GraphLibrary objects into this one
 
         Args:
@@ -106,7 +112,7 @@ class GraphLibrary:
         # iterate over supplied library instances
         for other in others:
             for sig in other.graphs.keys():
-                self.encounter(other.graphs[sig],count=other.counts[sig])
+                self.encounter(other.graphs[sig],count=(other.counts[sig] if counts else 0))
 
 class Snapshot:
     R""" identifies neighborhoods from simulation snapshot
@@ -169,6 +175,12 @@ class Snapshot:
         for i in range(self.N):
             G = Graph(self.NN[i])
             self.graph_index[i] = self.library.encounter(G)
+    def mapTo(self,library):
+        global_graph_index = np.zeros(self.N)
+        for i, sig in enumerate(self.library.graphs.keys()):
+            idx = library.find(self.library.graphs[sig])
+            global_graph_index[self.graph_index == i] = (idx if idx is not None else -1)
+        return graph_index_global
     def save(self,filename,graphs=True,neighborhoods=True):
         with open(filename,'wb') as fid:
             buff = {}
