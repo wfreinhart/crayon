@@ -32,14 +32,19 @@ def neighborsToAdjacency(i, NL):
     return A
 
 class NeighborList:
-    def __init__(self,snap):
+    def __init__(self):
         self.set_params()
-        self.snap = snap
-        self.neighbors = None
     def set_params(self):
         pass
-    def build(self):
-        self.neighbors = []
+    def build(self,snap):
+        snap.neighbors = []
+    def getNeighborhoods(self,snap,rebuild=False):
+        if rebuild or snap.neighbors is None:
+            self.build(snap)
+        neighborhoods = []
+        for i in range(snap.N):
+            neighborhoods.append(neighborsToAdjacency(i,snap.neighbors))
+        return neighborhoods
 
 class AdaptiveCNA(NeighborList):
     def set_params(self,r_max=40.,max_nbr=16,strict_rcut=True,near_nbr=6,geo_factor=1.2071):
@@ -50,38 +55,38 @@ class AdaptiveCNA(NeighborList):
         self.geo_factor = geo_factor
         if not foundFreud:
             raise RuntimeError('neighborlist.AdaptiveCNA requires freud')
-    def build(self):
-        self.f_box = freud.box.Box(Lx=self.snap.L[0],Ly=self.snap.L[1],Lz=self.snap.L[2],is2D=False)
-        self.f_nl  = freud.locality.NearestNeighbors(self.r_max,self.max_nbr,strict_cut=self.strict_rcut)
-        self.f_nl.compute(self.f_box,self.snap.xyz,self.snap.xyz)
-        Rsq = self.f_nl.getRsqList()
+    def build(self,snap):
+        box = freud.box.Box(Lx=snap.L[0],Ly=snap.L[1],Lz=snap.L[2],is2D=False)
+        nl  = freud.locality.NearestNeighbors(self.r_max,self.max_nbr,strict_cut=self.strict_rcut)
+        nl.compute(box,snap.xyz,snap.xyz)
+        Rsq = nl.getRsqList()
         Rsq[Rsq < 0] = np.nan
         R6 = np.nanmean(Rsq[:,:self.near_nbr],axis=1)
         Rcut = self.geo_factor**2. * R6
-        nl = self.f_nl.getNeighborList()
-        self.neighbors = []
-        for i in range(self.snap.N):
-            self.neighbors.append(nl[i,Rsq[i,:]<Rcut[i]])
+        nl = nl.getNeighborList()
+        snap.neighbors = []
+        for i in range(snap.N):
+            snap.neighbors.append(nl[i,Rsq[i,:]<Rcut[i]])
 
 class Voronoi(NeighborList):
     def set_params(self,cluster_method='centroid',cluster_ratio=0.25):
         self.cluster_method = cluster_method
         self.cluster_ratio = cluster_ratio
     # find set of neighbors from triangulation mesh
-    def tri_neighbors(self,idx):
+    def tri_neighbors(self,idx,tri):
         try:
-            verts = self.tri.vertices
+            verts = tri.vertices
         except:
-            verts = self.tri.simplices
+            verts = tri.simplices
         tri_conn = verts[np.sum(verts==idx,1)>0,:].flatten()
         nn = list(set(tri_conn[tri_conn != idx]))
         return nn
     # filter neighbors by hierarchical clustering
-    def filter_neighbors(self,idx):
+    def filter_neighbors(self,idx,tri):
         # get neighbors from triangulation
-        nn = np.array( self.tri_neighbors(idx) )
+        nn = np.array( tri_neighbors(idx,tri) )
         # sort neighbors by increasing distance
-        d_nbr = np.sqrt(np.sum((self.W[nn,:] - self.W[idx,:])**2.,1))
+        d_nbr = np.sqrt(np.sum((W[nn,:] - W[idx,:])**2.,1))
         order = np.argsort(d_nbr)
         nn = np.array(nn)[order]
         d_nbr = d_nbr[order]
@@ -93,13 +98,13 @@ class Voronoi(NeighborList):
         nn = nn[h_base]
         return nn
     # return positions of particles and their nearest images
-    def box_image(self):
-        M = np.hstack((0.,self.snap.L))
+    def box_image(self,snap):
+        M = np.hstack((0.,snap.L))
         d_max = np.sqrt(np.sum(M**2.))
-        I = np.reshape(np.arange(self.snap.xyz.shape[0]),(-1,1))
-        W = np.hstack((I,self.snap.xyz))
+        I = np.reshape(np.arange(snap.xyz.shape[0]),(-1,1))
+        W = np.hstack((I,snap.xyz))
         dim_keys = {'x': 0, 'y': 1, 'z': 2}
-        pdim = [dim_keys[x] for x in self.snap.pbc]
+        pdim = [dim_keys[x] for x in snap.pbc]
         for dim in pdim:
             M_dim = np.zeros(4)
             M_dim[dim+1] = M[dim+1]
@@ -110,11 +115,11 @@ class Voronoi(NeighborList):
             W = np.vstack((W,neg_img,pos_img))
         return W[:,0], W[:,1:]
     # compute Delaunay triangulation
-    def build(self):
-        self.I, self.W = self.box_image()
-        self.tri = triangulate(self.W)
-        self.neighbors = []
-        for idx in range(self.snap.N):
-            nn = self.I[np.asarray( self.filter_neighbors(idx) )].flatten()
+    def build(self,snap):
+        I, W = self.box_image(snap)
+        tri = triangulate(W)
+        snap.neighbors = []
+        for idx in range(snap.N):
+            nn = I[np.asarray( self.filter_neighbors(idx,tri) )].flatten()
             nn_unique = np.array(list(set(nn)),dtype=np.int)
-            self.neighbors.append(nn_unique)
+            snap.neighbors.append(nn_unique)

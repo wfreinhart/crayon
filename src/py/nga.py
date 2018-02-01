@@ -64,10 +64,16 @@ class GraphLibrary:
     Args:
         (None)
     """
-    def __init__(self):
+    def __init__(self,neighborhoods=None):
         self.graphs = {}
         self.counts = {}
         self.index = {}
+        if neighborhoods is not None:
+            self.build(neighborhoods)
+    def build(self,neighborhoods):
+        for i, nn in enumerate(neighborhoods):
+            G = Graph(nn)
+            self.encounter(G)
     def find(self,G):
         sig = str(G)
         try:
@@ -122,8 +128,8 @@ class Snapshot:
         L (array-like): box dimensions in x, y, z
         pbc (str): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,xyz=None,L=None,pbc='xyz',nl_type='adaptiveCNA'):
-        # check that variable types and sizes match expected
+    def __init__(self,xyz=None,L=None,pbc='xyz'):
+        # check for valid particle positions
         if xyz is not None:
             try:
                 R = np.asarray(xyz)
@@ -135,6 +141,7 @@ class Snapshot:
             raise RuntimeError('Error: must provide xyz (array of particle coordinates)')
         self.xyz = xyz
         self.N = len(xyz)
+        # check for valid box size
         if L is not None:
             try:
                 L = np.asarray(L)
@@ -145,64 +152,13 @@ class Snapshot:
         else:
             raise RuntimeError('Error: must provide L (box dimensions)')
         self.L = L
-        self.pbc = pbc
-        nlAllowed = ['delaunay','adaptivecna']
-        if nl_type.lower() not in nlAllowed:
-            raise ValueError('Error: nlType must be one of the following: %s'%', '.join(nlAllowed))
+        # check for valid periodic boundary conditions
         for p in pbc:
             if p.lower() not in 'xyz':
                 raise ValueError('Error: periodic boundary conditions must be combination of x, y, and z')
-        # assign snapshot data
-        self.NL = AdaptiveCNA(self)
-        # self.NL = Voronoi(self)
-        self.NN = None
-        self.library = GraphLibrary()
-        self.graph_index = np.zeros(self.N) - 1
-    def getNeighborhoods(self):
-        if self.NL.neighbors is None:
-            self.NL.build()
-        self.NN = []
-        for i in range(self.N):
-            self.NN.append(neighborsToAdjacency(i,self.NL.neighbors))
-        return self.NN
-    def buildLibrary(self):
-        R""" constructs neighborhood Graphs from nearest neighbors of all particles and adds them
-             to a Snapshot-specific GraphLibrary
-        """
-        if self.NN is None:
-            self.getNeighborhoods()
-        # build graphs from neighborhoods
-        for i in range(self.N):
-            G = Graph(self.NN[i])
-            self.graph_index[i] = self.library.encounter(G)
-    def mapTo(self,library):
-        global_graph_index = np.zeros(self.N)
-        for i, sig in enumerate(self.library.graphs.keys()):
-            idx = library.find(self.library.graphs[sig])
-            global_graph_index[self.graph_index == i] = (idx if idx is not None else -1)
-        return graph_index_global
-    def save(self,filename,graphs=True,neighborhoods=True):
-        with open(filename,'wb') as fid:
-            buff = {}
-            if graphs:
-                buff['graph_adj'] = [g.adj for key, g in self.library.graphs.items()]
-                buff['graph_index'] = self.graph_index
-            if neighborhoods:
-                buff['NN'] = self.NN
-            pickle.dump(buff,fid)
-    def load(self,filename):
-        with open(filename,'rb') as fid:
-            buff = pickle.load(fid)
-            if 'graph_adj' in buff and 'graph_index' in buff:
-                self.graph_index = buff['graph_index']
-                for i, adj in enumerate(buff['graph_adj']):
-                    G = Graph(adj)
-                    sig = str(G)
-                    self.library.index[sig] = len(self.library.graphs)
-                    self.library.graphs[sig] = G
-                    self.library.counts[sig] = np.sum(self.graph_index == i)
-            if 'NN' in buff:
-                self.NN = buff['NN']
+        self.pbc = pbc
+        # let NeighborList build neighbors
+        self.neighbors = None
 
 class Ensemble:
     def __init__(self):
