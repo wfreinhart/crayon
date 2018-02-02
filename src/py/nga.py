@@ -9,13 +9,22 @@ from __future__ import print_function
 import sys
 import inspect
 import pickle
-import zlib
 
 from crayon import _crayon
 
 import numpy as np
 from emd import emd
 
+try:
+    import zlib
+    sig_compression = True
+except:
+    sig_compression = False
+
+sig_compression = False
+
+from color import *
+from dmap import *
 from neighborlist import *
 
 class Graph:
@@ -55,8 +64,10 @@ class Graph:
         s_edges = str(np.sum(self.adj))
         s_gdd = str(self.gdd.tolist())
         s = '%s:%s:%s'%(s_nodes,s_edges,s_gdd)
-        return s
-        # return zlib.compress(s)
+        if sig_compression:
+            return zlib.compress(s)
+        else:
+            return s
 
 class GraphLibrary:
     R""" handles sets of graphs from snapshots and ensembles of snapshots
@@ -64,16 +75,23 @@ class GraphLibrary:
     Args:
         (None)
     """
-    def __init__(self,neighborhoods=None):
+    def __init__(self):
         self.graphs = {}
         self.counts = {}
         self.index = {}
-        if neighborhoods is not None:
-            self.build(neighborhoods)
+        self.sigs = []
     def build(self,neighborhoods):
+        nn_idx = []
         for i, nn in enumerate(neighborhoods):
             G = Graph(nn)
-            self.encounter(G)
+            nn_idx.append(self.encounter(G))
+        nn_idx = np.asarray(nn_idx,dtype=np.int)
+        nn_lookup = {}
+        for i, sig in enumerate(self.graphs.keys()):
+            if sig not in nn_lookup:
+                nn_lookup[sig] = np.array([])
+            nn_lookup[sig] = np.hstack((nn_lookup[sig],np.argwhere(nn_idx==self.index[sig]).flatten()))
+        return nn_lookup
     def find(self,G):
         sig = str(G)
         try:
@@ -128,39 +146,95 @@ class Snapshot:
         L (array-like): box dimensions in x, y, z
         pbc (str): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,xyz=None,L=None,pbc='xyz'):
-        # check for valid particle positions
-        if xyz is not None:
-            try:
-                R = np.asarray(xyz)
-            except:
-                raise TypeError('Error: xyz must be array-like')
-            if R.shape[1] != 3:
-                raise ValueError('Error: xyz must have 3 columns')
-        else:
-            raise RuntimeError('Error: must provide xyz (array of particle coordinates)')
-        self.xyz = xyz
-        self.N = len(xyz)
-        # check for valid box size
-        if L is not None:
-            try:
-                L = np.asarray(L)
-            except:
-                raise TypeError('Error: L must be array-like')
-            if len(L) != 3:
-                raise ValueError('Error: L must have 3 elements')
-        else:
-            raise RuntimeError('Error: must provide L (box dimensions)')
-        self.L = L
+    def __init__(self,reader_input,reader=None,pbc='xyz',nl=None):
+        reader(self,reader_input)
         # check for valid periodic boundary conditions
         for p in pbc:
             if p.lower() not in 'xyz':
-                raise ValueError('Error: periodic boundary conditions must be combination of x, y, and z')
+                raise ValueError('periodic boundary conditions must be combination of x, y, and z')
         self.pbc = pbc
+        # check for valid NeighborList object
+        if nl is not None:
+            if type(nl) != type(NeighborList()):
+                raise ValueError('nl must be a NeighborList object')
+        else:
+            raise RuntimeError('must provide a NeighborList object')
+        self.nl = nl
         # let NeighborList build neighbors
         self.neighbors = None
+        self.adjacency = None
+        self.library = None
+        self.lookup = None
+    def buildNeighborhoods(self):
+        self.neighbors = self.nl.getNeighbors(self)
+    def buildAdjacency(self):
+        self.adjacency = self.nl.getAdjacency(self)
+    def buildLibrary(self):
+        self.library = GraphLibrary()
+        if self.adjacency is None:
+            if self.neighbors is None:
+                self.buildNeighborhoods()
+            self.buildAdjacency()
+        self.lookup = self.library.build(self.adjacency)
+    def mapTo(self,library):
+        for sig, idx in self.lookup.items():
+            pass
+    def save(self,filename,neighbors=False,adjacency=False,library=False):
+        buff = {}
+        if neighbors:
+            buff['neighbors'] = self.neighbors
+        if adjacency:
+            buff['adjacency'] = self.adjacency
+        if library:
+            buff['library'] = self.library
+            buff['lookup'] = self.lookup
+        with open(filename,'wb') as fid:
+            pickle.dump(buff,fid)
+    def load(self,filename):
+        with open(filename,'rb') as fid:
+            buff = pickle.load(fid)
+        if 'neighbors' in buff:
+            self.neighbors = buff['neighbors']
+        if 'adjacency' in buff:
+            self.adjacency = buff['adjacency']
+        if 'library' in buff:
+            self.library = buff['library']
+            self.lookup = buff['lookup']
 
 class Ensemble:
     def __init__(self):
         self.library = GraphLibrary()
-        self.ldmap = dmap.DMap()
+        self.dmap = DMap()
+        self.lookups = {}
+        self.dists = None
+    def insert(self,idx,snap):
+        if snap.library is None:
+            snap.buildLibrary()
+        self.library.collect(snap.library)
+        self.lookups[idx] = snap.lookup
+    def collect(self,others):
+        if type(others) != list:
+            others = list([others])
+        if len(others) == 0:
+            return
+        if type(others[0]) != type(Ensemble()):
+            raise TypeError('Ensemble.collect expects a list of Ensemble objects')
+        # iterate over supplied library instances
+        for other in others:
+            self.library.collect(other.library)
+            for key, val in other.lookups.items():
+                if key in self.lookups:
+                    print('Warning: duplicate lookup key detected during Ensemble.collect')
+                self.lookups[key] = val
+    def getColorMaps(self,cidx):
+        c, c_map = compressColors(self.dmap.color_coords[:,cidx],delta=0.01)
+        frames = self.lookups.keys()
+        frames.sort()
+        frame_maps = []
+        for f in frames:
+            N = np.sum(np.asarray([len(val) for key, val in self.lookups[f].items()]))
+            frame_data = np.zeros(N)
+            for key, val in self.lookups[f].items():
+                frame_data[np.asarray(val,dtype=np.int)] = c_map[self.library.index[key]]
+            frame_maps.append(frame_data)
+        return c, frame_maps
