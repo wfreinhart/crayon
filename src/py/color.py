@@ -23,56 +23,20 @@ def compressColors(colors,delta=0.001):
         cmap[i] = np.argwhere(color_delta == 0).flatten()[0]
     return c, cmap
 
-# def colorMap(Ensemble):
+def neighborSimilarity(f_map,neighbors,coords):
+    N = len(f_map)
+    f_dat = np.zeros((N,3))
+    for i in range(N):
+        nn = np.array(f_map[np.asarray(neighbors[i])],dtype=np.int)
+        delta = np.sqrt(np.sum((coords[nn,:] - coords[f_map[i],:])**2.,1))
+        f_dat[i,0] = np.mean(delta)
+        f_dat[i,1] = np.min(delta)
+    for i in range(N):
+        nn = np.array(f_map[np.asarray(neighbors[i])],dtype=np.int)
+        f_dat[i,2] = np.mean(f_dat[nn,0])
+    return f_dat
 
-# Y = np.loadtxt('vor_transform.dat')
-# colors = np.loadtxt('vor_color_map.dat')
-
-# # get particle graph identity
-# u = 0
-# frame_idx = np.zeros(N)
-# for i in range(N):
-#     if q6filter is True and Q6[i] < 0.20:
-#         if flag_active:
-#             print('Q6 FILTER APPLIED')
-#             flag_active = False
-#         continue
-#     A = build_adjacency(i,NN)
-#     sig = sig_from_A(A)
-#     try:
-#         idx = sig_map[ sig ]
-#         frame_idx[i] = idx
-#     except:
-#         print('warning: could not find idx for particle %d'%i)
-#         u += 1
-# if u > 0:
-#     print('warning: left %d particles unassigned!'%u)
-
-# # check similarity to particles in neighbor shell
-# s = np.zeros((N,3))
-# for i in range(N):
-#     nnbr  = np.array(frame_idx[np.asarray(NN[i])],dtype=np.int)
-#     nevec = Y[nnbr,:]
-#     n = len(nnbr)
-#     devec = np.sqrt(np.sum((nevec - Y[frame_idx[i]])**2.,1))
-#     s[i,0] = np.mean(devec)
-#     s[i,1] = np.min(devec)
-# for i in range(N):
-#     nnbr  = np.asarray(NN[i],dtype=np.int)
-#     s[i,2] = np.mean(s[nnbr,0])
-# # assign color to each particle
-# frame_colors = np.zeros((N,s.shape[1]+1)) - 1
-# for i in range(N):
-#     try:
-#         frame_colors[i,0] = int( cmap[frame_idx[i]] )
-#         frame_colors[i,1:] = s[i,:]
-#     except:
-#         print('warning: could not find frame color for particle %d (idx = %d, N = %d)'%(i,idx,len(cmap.keys())))
-
-# # save dists so VMD can read them
-# np.savetxt(frame.replace('.xml','.cmap'),frame_colors,fmt='%f')
-
-def writeVMD(filename,snapshots,colors,n_col,sigma=1.0,file_type='hoomd',swap=('',''),mode='add'):
+def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,file_type='hoomd',swap=('',''),mode='add'):
     # create a VMD draw script
     fid = open(filename,'w')
     cmds = ['axes location off',
@@ -103,7 +67,7 @@ def writeVMD(filename,snapshots,colors,n_col,sigma=1.0,file_type='hoomd',swap=('
             print('mol addfile %s type %s'%(xml_prefix,file_type),file=fid)
             newFrame = False
         cmds = ['[atomselect top "all"] set radius %f'%(0.50*sigma),
-                'set fid [open "%s.cmap"]'%xml_prefix,
+                'set fid [open "%s'%xml_prefix + '_%d%d%d.cmap"]'%com,
                 'set file_data [read $fid]',
                 'close $fid',
                 'set sel [atomselect top "all"]',

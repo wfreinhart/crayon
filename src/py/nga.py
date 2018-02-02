@@ -147,6 +147,16 @@ class Snapshot:
         pbc (str): dimensions with periodic boundaries (defaults to 'xyz')
     """
     def __init__(self,reader_input,reader=None,pbc='xyz',nl=None):
+        # initialize class member variables
+        self.neighbors = None
+        self.adjacency = None
+        self.library = None
+        self.lookup = None
+        # load from file
+        if reader is None:
+            self.load(reader_input)
+            return None
+        # read from generator function
         reader(self,reader_input)
         # check for valid periodic boundary conditions
         for p in pbc:
@@ -160,11 +170,6 @@ class Snapshot:
         else:
             raise RuntimeError('must provide a NeighborList object')
         self.nl = nl
-        # let NeighborList build neighbors
-        self.neighbors = None
-        self.adjacency = None
-        self.library = None
-        self.lookup = None
     def buildNeighborhoods(self):
         self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
