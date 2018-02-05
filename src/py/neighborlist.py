@@ -81,9 +81,9 @@ class Voronoi(NeighborList):
         nn = list(set(tri_conn[tri_conn != idx]))
         return nn
     # filter neighbors by hierarchical clustering
-    def filterNeighbors(self,idx,tri):
+    def filterNeighbors(self,idx,W,tri):
         # get neighbors from triangulation
-        nn = np.array( triNeighbors(idx,tri) )
+        nn = np.array( self.triNeighbors(idx,tri) )
         # sort neighbors by increasing distance
         d_nbr = np.sqrt(np.sum((W[nn,:] - W[idx,:])**2.,1))
         order = np.argsort(d_nbr)
@@ -119,7 +119,7 @@ class Voronoi(NeighborList):
         tri = triangulate(W)
         neighbors = []
         for idx in range(snap.N):
-            nn = I[np.asarray( self.filterNeighbors(idx,tri) )].flatten()
+            nn = I[np.asarray( self.filterNeighbors(idx,W,tri) )].flatten()
             nn_unique = np.array(list(set(nn)),dtype=np.int)
             neighbors.append(nn_unique)
         return neighbors
