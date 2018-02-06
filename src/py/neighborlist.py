@@ -29,6 +29,9 @@ def neighborsToAdjacency(i, NL):
     for j in range(len(idx)):
         for k in range(len(idx)):
             A[j,k] = int( (idx[k] in NL[idx[j]].flatten()) or j == k )
+    # include central particle in adjacency matrix
+    A = np.hstack((A,np.ones((n,1))))
+    A = np.vstack((A,np.ones((1,n+1))))
     return A
 
 class NeighborList:
