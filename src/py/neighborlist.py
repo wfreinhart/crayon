@@ -10,6 +10,8 @@ import sys
 
 import numpy as np
 
+from crayon import _crayon
+
 from scipy.spatial import Delaunay as triangulate
 from scipy.spatial.distance import pdist
 from scipy.cluster import hierarchy
@@ -125,4 +127,38 @@ class Voronoi(NeighborList):
             nn = I[np.asarray( self.filterNeighbors(idx,W,tri) )].flatten()
             nn_unique = np.array(list(set(nn)),dtype=np.int)
             neighbors.append(nn_unique)
+        return neighbors
+
+class VoroPP(NeighborList):
+    def setParams(self,cluster_method='centroid',cluster_ratio=0.25):
+        self.cluster_method = cluster_method
+        self.cluster_ratio = cluster_ratio
+    # filter neighbors by hierarchical clustering
+    def filterNeighbors(self,idx,neighbors,snap):
+        # get neighbors from triangulation
+        nn = np.asarray(neighbors[idx],dtype=np.int)
+        # get displacement vectors
+        d_vec = snap.xyz[nn,:] - snap.xyz[idx,:]
+        # wrap them according to boundary conditions specified in Snapshot
+        pbc = np.asarray([dim in snap.pbc for dim in 'xyz'],dtype=np.float)
+        d_vec -= snap.L * np.round( d_vec / snap.L * pbc)
+        # sort neighbors by increasing distance
+        d_nbr = np.sqrt(np.sum((d_vec)**2.,1))
+        order = np.argsort(d_nbr)
+        nn = np.array(nn)[order]
+        d_nbr = d_nbr[order]
+        X = d_nbr.reshape(-1,1)
+        # exclude far-away particles by clustering
+        Z = hierarchy.linkage(X,self.cluster_method)
+        c = hierarchy.fcluster(Z,self.cluster_ratio*d_nbr[0],criterion='distance')
+        h_base = np.argwhere(c == c[0]).flatten()
+        nn = nn[h_base]
+        return nn
+    # compute Delaunay triangulation with Voro++ library
+    def getNeighbors(self,snap):
+        nl = _crayon.voropp(snap.xyz,snap.L)
+        neighbors = []
+        for idx in range(snap.N):
+            nn = np.array(self.filterNeighbors(idx,nl,snap).flatten(),dtype=np.int)
+            neighbors.append(nn)
         return neighbors

@@ -12,6 +12,7 @@
 
 #include "PyGraph.h"
 #include "Comparison.h"
+#include "Neighbors.h"
 
 PYBIND11_MODULE(_crayon, m)
     {
@@ -24,6 +25,7 @@ PYBIND11_MODULE(_crayon, m)
         // export to python via pybind11
         export_PyGraph(m);
         export_Comparison(m);
+        export_VoroNeighbors(m);
 
         } // end namespace crayon
     }

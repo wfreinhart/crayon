@@ -37,6 +37,7 @@ include_directories(${PROJECT_SOURCE_DIR}/eigen)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/include)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/libgraph/include)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/src)
+include_directories(${PROJECT_SOURCE_DIR}/voro++)
 
 set(CRAYON_DEST "${CMAKE_INSTALL_PREFIX}/crayon")
 SET(CMAKE_SKIP_BUILD_RPATH FALSE)
@@ -47,6 +48,10 @@ LIST(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CRAYON_DEST}/lib" isSystem
 IF("${isSystemDir}" STREQUAL "-1")
    SET(CMAKE_INSTALL_RPATH "${CRAYON_DEST}/lib")
 ENDIF("${isSystemDir}" STREQUAL "-1")
+
+# build voro++ library
+file(GLOB SRC_VOROPP "voro++/voro++/voro++.cc")
+add_library(voropp SHARED ${SRC_VOROPP})
 
 # build orca library
 file(GLOB SRC_ORCA "libgraphlet/src/orca/Orca.cpp")
@@ -62,6 +67,7 @@ add_library(graphlet SHARED ${SRC_GRAPHLET})
 file(GLOB SRC_CRAYON "src/*.cc")
 add_library(crayon SHARED ${SRC_CRAYON})
 target_link_libraries(crayon
+	              voropp
                       orca
                       graphlet
 )
@@ -69,6 +75,7 @@ set_target_properties(crayon PROPERTIES PREFIX "_")
 set_target_properties(crayon PROPERTIES SUFFIX ".so")
 
 # install C++ libraries
+install(TARGETS voropp DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS orca DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS graphlet DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS crayon DESTINATION ${CRAYON_DEST})
