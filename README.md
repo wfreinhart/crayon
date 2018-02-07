@@ -38,7 +38,8 @@ import crayon
  * Included (as git submodules):
      * Eigen (header only)
      * pybind11 (header only)
-     * libgraphlet (linked automatically)
+     * libgraphlet (built and linked automatically)
+     * Voro++ (build and linked automatically)
 
 ### Testing
 

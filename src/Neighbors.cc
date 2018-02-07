@@ -10,7 +10,8 @@
 namespace crayon
 {
 
-std::vector<std::vector<int>> VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L)
+std::vector<std::vector<int>> VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
+    const bool x_pbc, const bool y_pbc, const bool z_pbc)
     {
     double x_lo = -0.5*L(0);
     double x_hi =  0.5*L(0);
@@ -18,9 +19,6 @@ std::vector<std::vector<int>> VoroNeighbors(const Eigen::MatrixXf &R, const Eige
     double y_hi =  0.5*L(1);
     double z_lo = -0.5*L(2);
     double z_hi =  0.5*L(2);
-    bool x_pbc = true;
-    bool y_pbc = true;
-    bool z_pbc = true;
     voro::pre_container precon(x_lo,x_hi,y_lo,y_hi,z_lo,z_hi,x_pbc,y_pbc,z_pbc);
     int nx = 0;
     int ny = 0;

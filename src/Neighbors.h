@@ -19,7 +19,8 @@
 namespace crayon
 {
 
-std::vector<std::vector<int>> VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L);
+std::vector<std::vector<int>> VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
+    const bool x_pbc, const bool y_pbc, const bool z_pbc);
 
 void export_VoroNeighbors(pybind11::module& m);
 

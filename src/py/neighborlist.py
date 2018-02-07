@@ -12,8 +12,6 @@ import numpy as np
 
 from crayon import _crayon
 
-from scipy.spatial import Delaunay as triangulate
-from scipy.spatial.distance import pdist
 from scipy.cluster import hierarchy
 
 try:
@@ -73,64 +71,8 @@ class AdaptiveCNA(NeighborList):
         return neighbors
 
 class Voronoi(NeighborList):
-    def setParams(self,cluster_method='centroid',cluster_ratio=0.25):
-        self.cluster_method = cluster_method
-        self.cluster_ratio = cluster_ratio
-    # find set of neighbors from triangulation mesh
-    def triNeighbors(self,idx,tri):
-        try:
-            verts = tri.vertices
-        except:
-            verts = tri.simplices
-        tri_conn = verts[np.sum(verts==idx,1)>0,:].flatten()
-        nn = list(set(tri_conn[tri_conn != idx]))
-        return nn
-    # filter neighbors by hierarchical clustering
-    def filterNeighbors(self,idx,W,tri):
-        # get neighbors from triangulation
-        nn = np.array( self.triNeighbors(idx,tri) )
-        # sort neighbors by increasing distance
-        d_nbr = np.sqrt(np.sum((W[nn,:] - W[idx,:])**2.,1))
-        order = np.argsort(d_nbr)
-        nn = np.array(nn)[order]
-        d_nbr = d_nbr[order]
-        X = d_nbr.reshape(-1,1)
-        # exclude far-away particles by clustering
-        Z = hierarchy.linkage(X,self.cluster_method)
-        c = hierarchy.fcluster(Z,self.cluster_ratio*d_nbr[0],criterion='distance')
-        h_base = np.argwhere(c == c[0]).flatten()
-        nn = nn[h_base]
-        return nn
-    # return positions of particles and their nearest images
-    def boxImage(self,snap):
-        M = np.hstack((0.,snap.L))
-        d_max = np.sqrt(np.sum(M**2.))
-        I = np.reshape(np.arange(snap.xyz.shape[0]),(-1,1))
-        W = np.hstack((I,snap.xyz))
-        dim_keys = {'x': 0, 'y': 1, 'z': 2}
-        pdim = [dim_keys[x] for x in snap.pbc]
-        for dim in pdim:
-            M_dim = np.zeros(4)
-            M_dim[dim+1] = M[dim+1]
-            neg_half = W[:,dim+1] < 0
-            pos_half = W[:,dim+1] > 0
-            neg_img  = W[neg_half,:] + M_dim
-            pos_img  = W[pos_half,:] - M_dim
-            W = np.vstack((W,neg_img,pos_img))
-        return W[:,0], W[:,1:]
-    # compute Delaunay triangulation
-    def getNeighbors(self,snap):
-        I, W = self.boxImage(snap)
-        tri = triangulate(W)
-        neighbors = []
-        for idx in range(snap.N):
-            nn = I[np.asarray( self.filterNeighbors(idx,W,tri) )].flatten()
-            nn_unique = np.array(list(set(nn)),dtype=np.int)
-            neighbors.append(nn_unique)
-        return neighbors
-
-class VoroPP(NeighborList):
-    def setParams(self,cluster_method='centroid',cluster_ratio=0.25):
+    def setParams(self,clustering=True,cluster_method='centroid',cluster_ratio=0.25):
+        self.clustering = clustering
         self.cluster_method = cluster_method
         self.cluster_ratio = cluster_ratio
     # filter neighbors by hierarchical clustering
@@ -156,9 +98,12 @@ class VoroPP(NeighborList):
         return nn
     # compute Delaunay triangulation with Voro++ library
     def getNeighbors(self,snap):
-        nl = _crayon.voropp(snap.xyz,snap.L)
+        nl = _crayon.voropp(snap.xyz, snap.L, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
         neighbors = []
         for idx in range(snap.N):
-            nn = np.array(self.filterNeighbors(idx,nl,snap).flatten(),dtype=np.int)
-            neighbors.append(nn)
+            if self.clustering:
+                nn = self.filterNeighbors(idx,nl,snap)
+            else:
+                nn = nl[idx]
+            neighbors.append(np.array(nn,dtype=np.int))
         return neighbors
