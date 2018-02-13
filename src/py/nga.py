@@ -310,23 +310,43 @@ class Ensemble:
                 self.dists[i,jid] = d
             self.dists = self.dists / np.max(self.dists)
     def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False):
-        if self.dmap is None:
-            return
-        coms, best = self.dmap.uncorrelatedTriplets()
-        print('probable best eigenvector triplet is %s'%str(coms[best]))
-        for com in coms:
-            self.colorTriplet(com,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito)
-    def colorTriplet(self,trip,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False):
-        cidx = np.array(trip)
-        colors, frame_maps = self.getColorMaps(cidx)
-        for f, filename in enumerate(self.filenames):
+        coms = None
+        if self.master:
+            coms, best = self.dmap.uncorrelatedTriplets()
+            print('probable best eigenvector triplet is %s'%str(coms[best]))
+        coms = self.p.shareData(coms)
+        self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito)
+    def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False):
+        # share data among workers
+        colors = []
+        frame_maps = []
+        color_coords = None
+        if self.master:
+            color_coords = self.dmap.color_coords
+            for trip in trips:
+                c, f = self.getColorMaps(np.array(trip))
+                colors.append(c)
+                frame_maps.append(f)
+        colors = self.p.shareData(colors)
+        frame_maps = self.p.shareData(frame_maps)
+        color_coords = self.p.shareData(color_coords)
+        # compute cluster similarity
+        local_file_idx  = parallel.partition(range(len(self.filenames)))
+        for f in local_file_idx:
+            filename = self.filenames[f]
             snap = Snapshot(filename + '.nga')
-            f_dat = color.neighborSimilarity(frame_maps[f],snap.neighbors,self.dmap.color_coords[:,cidx])
-            np.savetxt(filename + '_%d%d%d.cmap'%trip, np.hstack((frame_maps[f].reshape(-1,1),f_dat)))
-        if VMD:
-            n_col = 4
-            color.writeVMD('%s_%d%d%d.tcl'%(prefix,trip[0],trip[1],trip[2]), self.filenames, colors, trip, n_col,
-                           sigma=sigma, swap=('/home/wfr/','/Users/wfr/mountpoint/'))
+            for t, trip in enumerate(trips):
+                sim = color.neighborSimilarity(frame_maps[t][f],snap.neighbors,color_coords[:,np.array(trip)])
+                f_dat = np.hstack((frame_maps[t][f].reshape(-1,1),sim))
+                np.savetxt(filename + '_%d%d%d.cmap'%trip, f_dat)
+        if not self.master:
+            return
+        # write visualization scripts
+        for t, trip in enumerate(trips):
+            if VMD:
+                color.writeVMD('%s_%d%d%d.tcl'%(prefix,trip[0],trip[1],trip[2]),
+                               self.filenames, colors[t], trip, f_dat.shape[1], sigma=sigma,
+                               swap=('/home/wfr/','/Users/wfr/mountpoint/'))
     def buildDMap(self):
         if self.master:
             self.dmap = dmap.DMap()
