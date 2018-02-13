@@ -21,7 +21,7 @@ sys.path.insert(0,test_path)
 
 import unittest
 
-class TestPyGraph(unittest.TestCase):
+class TestCrayon(unittest.TestCase):
     # run this every time
     def setUp(self):
         pass

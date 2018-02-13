@@ -11,6 +11,8 @@ import inspect
 import pickle
 
 from crayon import _crayon
+from crayon import parallel
+from crayon import color
 
 import numpy as np
 from emd import emd
@@ -43,7 +45,7 @@ class Graph:
         self.gdv = self.C.gdv()
         s = np.sum(self.gdv,1)
         s[s==0] = 1.
-        self.ngdv = self.gdv / np.transpose( s * np.ones((self.gdv.shape[1],1)))
+        self.ngdv = self.gdv # / np.transpose( s * np.ones((self.gdv.shape[1],1)))
     def __sub__(self,other):
         R""" difference between this and another Graph, defined as the Earth Mover's Distance
         between normalized Graphlet Degree Vectors
@@ -211,7 +213,11 @@ class Ensemble:
         self.library = GraphLibrary()
         self.dmap = DMap()
         self.lookups = {}
+        self.sigs = []
+        self.graphs = []
         self.dists = None
+        self.comm, self.size, self.rank, self.master = parallel.info()
+        self.p = parallel.ParallelTask()
     def insert(self,idx,snap):
         if snap.library is None:
             snap.buildLibrary()
@@ -231,6 +237,21 @@ class Ensemble:
                 if key in self.lookups:
                     print('Warning: duplicate lookup key detected during Ensemble.collect')
                 self.lookups[key] = val
+    def prune(self,min_freq=None):
+        try:
+            min_freq = int(min_freq)
+        except:
+            raise RuntimeError('Must specify min_freq, and it must be castable to int')
+        self.sigs = ['' for i in self.library.index]
+        for key, val in self.library.index.items():
+            self.sigs[val] = key
+        self.graphs = [self.library.graphs[s] for s in self.sigs]
+        n = len(self.sigs)
+        counts = np.array([self.library.counts[s] for s in self.sigs])
+        self.lm_idx = np.argwhere(np.array([self.library.counts[s] for s in self.sigs]) >= min_freq).flatten()
+        m = len(self.lm_idx)
+        self.lm_sigs = [s for s in self.sigs if self.library.counts[s] >= min_freq]
+        print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
     def getColorMaps(self,cidx):
         c, c_map = compressColors(self.dmap.color_coords[:,cidx],delta=0.01)
         frames = self.lookups.keys()
@@ -243,3 +264,46 @@ class Ensemble:
                 frame_data[np.asarray(val,dtype=np.int)] = c_map[self.library.index[key]]
             frame_maps.append(frame_data)
         return c, frame_maps
+    def computeDists(self):
+        # use a master-slave paradigm for load balancing
+        task_list = []
+        if self.master:
+            n = len(self.sigs)
+            m = len(self.lm_sigs)
+            self.dists = np.zeros( (n,m) ) + np.Inf # designate null values with Inf
+            for i in range(n):
+                for j in range(m):
+                    task_list.append( (i,self.lm_idx[j]) )
+        # perform graph matching in parallel using MPI
+        graphs = self.p.shareData(self.graphs)
+        eval_func = lambda task, data: data[task[0]] - data[task[1]]
+        result_list = self.p.computeQueue(function=eval_func,
+                                          tasks=task_list,
+                                          reports=10)
+        if self.master:
+            # convert results into numpy array
+            for k in range(len(result_list)):
+                i, j = task_list[k]
+                jid = np.argwhere(self.lm_idx == j)[0]
+                d = result_list[k]
+                self.dists[i,jid] = d
+            self.dists = self.dists / np.max(self.dists)
+    def autoColor(self,filenames,VMD=False,Ovito=False):
+        coms, best = self.dmap.uncorrelatedTriplets()
+        print('probable best eigenvector triplet is %s'%str(coms[best]))
+        for com in coms:
+            cidx = np.array(com)
+            colors, frame_maps = self.getColorMaps(cidx)
+            for f, filename in enumerate(filenames):
+                snap = Snapshot(filename + '.nga')
+                f_dat = color.neighborSimilarity(frame_maps[f],snap.neighbors,self.dmap.color_coords[:,cidx])
+                np.savetxt(filename + '_%d%d%d.cmap'%com, np.hstack((frame_maps[f].reshape(-1,1),f_dat)))
+            if VMD:
+                n_col = 4
+                color.writeVMD('draw_colors_%d%d%d.tcl'%com, filenames, colors, com, n_col,
+                               sigma=1.0, swap=('/home/wfr/','/Users/wfr/mountpoint/'))
+    def buildDMap(self):
+        if self.master:
+            self.dmap.set_params()
+            self.dmap.build(self.dists,landmarks=self.lm_idx)
+            print('Diffusion map construction complete')

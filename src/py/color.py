@@ -86,7 +86,7 @@ def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,file_type='hoomd',swa
                     'mol modstyle 0 top vdw 1.0 25',
                     'mol modmaterial 0 top "AOChalky"',
                     'mol modselect 0 top "all"',
-                    'mol modcolor 0 top ColorID 8',
+                    'mol modcolor 0 top ColorID 6',
                     'mol selupdate 0 top 1',
                     'mol colupdate 0 top 1',
                     'mol addrep top',

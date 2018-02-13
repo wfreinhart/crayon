@@ -10,6 +10,8 @@ import pickle
 
 import numpy as np
 
+from crayon import parallel
+
 try:
     import PyDMap
 except:
@@ -77,3 +79,15 @@ class DMap:
             hy, hx = np.histogram(r, bins=x, normed=True)
             c = np.cumsum(hy) / np.sum(hy)
             self.color_coords[:,i] = np.interp(r,0.5*(x[:-1]+x[1:]),c)
+    def uncorrelatedTriplets(self):
+        # first determine least correlated eigenvectors
+        X = np.abs( np.corrcoef(np.transpose(self.color_coords[:,1:])) )
+        Y = np.zeros(X.shape[1])
+        coms = []
+        for i in range(X.shape[1]):
+            com = tuple( np.sort( [i+1] + list(np.argsort(X[:,i])[:2]+1) ) )
+            if com not in coms:
+                coms.append(com)
+            Y[i] = np.sum(X[i,np.asarray(com)-1])
+        best = np.argwhere(Y[i] == np.min(Y[i]))
+        return coms, best
