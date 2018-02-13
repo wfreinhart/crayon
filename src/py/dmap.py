@@ -25,7 +25,7 @@ class DMap:
         self.evecs = None
         self.evecs_ny = None
         self.color_coords = None
-    def set_params(self,num_evec=6,epsilon=None):
+    def set_params(self,num_evec=10,epsilon=None):
         self.num_evec = num_evec
         self.epsilon = epsilon
     def build(self,L,landmarks=None):

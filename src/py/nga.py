@@ -12,7 +12,10 @@ import pickle
 
 from crayon import _crayon
 from crayon import parallel
+from crayon import neighborlist
 from crayon import color
+from crayon import io
+from crayon import dmap
 
 import numpy as np
 from emd import emd
@@ -24,10 +27,6 @@ except:
     sig_compression = False
 
 sig_compression = False
-
-from color import *
-from dmap import *
-from neighborlist import *
 
 class Graph:
     R""" evaluates topology of neighborhood
@@ -167,7 +166,7 @@ class Snapshot:
         self.pbc = pbc
         # check for valid NeighborList object
         if nl is not None:
-            if type(nl) != type(NeighborList()):
+            if type(nl) != type(neighborlist.NeighborList()):
                 raise ValueError('nl must be a NeighborList object')
         else:
             raise RuntimeError('must provide a NeighborList object')
@@ -211,19 +210,38 @@ class Snapshot:
 class Ensemble:
     def __init__(self):
         self.library = GraphLibrary()
-        self.dmap = DMap()
+        self.dmap = None
         self.lookups = {}
         self.sigs = []
         self.graphs = []
         self.dists = None
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
+    def neighborhoodsFromFile(self,filenames,nl):
+        self.filenames = filenames
+        local_file_idx  = parallel.partition(range(len(self.filenames)))
+        for f in local_file_idx:
+            filename = self.filenames[f]
+            print('rank %d of %d will process %s'%(self.rank,self.size,filename))
+            # create snapshot instance and build neighborhoods
+            if '.xml' in filename:
+                reader = io.readXML
+            elif '.gsd' in filename:
+                reader = io.readGSD
+            snap = Snapshot(filename,reader=reader,pbc='xyz',nl=nl)
+            self.insert(f,snap)
+            snap.save(filename + '.nga',adjacency=True,neighbors=True)
+        print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.library.graphs)))
+        self.collect()
     def insert(self,idx,snap):
         if snap.library is None:
             snap.buildLibrary()
         self.library.collect(snap.library)
         self.lookups[idx] = snap.lookup
-    def collect(self,others):
+    def collect(self):
+        others = self.p.gatherData(self)
+        if not self.master:
+            return
         if type(others) != list:
             others = list([others])
         if len(others) == 0:
@@ -237,7 +255,10 @@ class Ensemble:
                 if key in self.lookups:
                     print('Warning: duplicate lookup key detected during Ensemble.collect')
                 self.lookups[key] = val
+        print('collection complete, found %d unique graphs'%(len(self.library.graphs)))
     def prune(self,min_freq=None):
+        if not self.master:
+            return
         try:
             min_freq = int(min_freq)
         except:
@@ -253,7 +274,7 @@ class Ensemble:
         self.lm_sigs = [s for s in self.sigs if self.library.counts[s] >= min_freq]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
     def getColorMaps(self,cidx):
-        c, c_map = compressColors(self.dmap.color_coords[:,cidx],delta=0.01)
+        c, c_map = color.compressColors(self.dmap.color_coords[:,cidx],delta=0.01)
         frames = self.lookups.keys()
         frames.sort()
         frame_maps = []
@@ -288,22 +309,27 @@ class Ensemble:
                 d = result_list[k]
                 self.dists[i,jid] = d
             self.dists = self.dists / np.max(self.dists)
-    def autoColor(self,filenames,VMD=False,Ovito=False):
+    def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False):
+        if self.dmap is None:
+            return
         coms, best = self.dmap.uncorrelatedTriplets()
         print('probable best eigenvector triplet is %s'%str(coms[best]))
         for com in coms:
-            cidx = np.array(com)
-            colors, frame_maps = self.getColorMaps(cidx)
-            for f, filename in enumerate(filenames):
-                snap = Snapshot(filename + '.nga')
-                f_dat = color.neighborSimilarity(frame_maps[f],snap.neighbors,self.dmap.color_coords[:,cidx])
-                np.savetxt(filename + '_%d%d%d.cmap'%com, np.hstack((frame_maps[f].reshape(-1,1),f_dat)))
-            if VMD:
-                n_col = 4
-                color.writeVMD('draw_colors_%d%d%d.tcl'%com, filenames, colors, com, n_col,
-                               sigma=1.0, swap=('/home/wfr/','/Users/wfr/mountpoint/'))
+            self.colorTriplet(com,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito)
+    def colorTriplet(self,trip,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False):
+        cidx = np.array(trip)
+        colors, frame_maps = self.getColorMaps(cidx)
+        for f, filename in enumerate(self.filenames):
+            snap = Snapshot(filename + '.nga')
+            f_dat = color.neighborSimilarity(frame_maps[f],snap.neighbors,self.dmap.color_coords[:,cidx])
+            np.savetxt(filename + '_%d%d%d.cmap'%trip, np.hstack((frame_maps[f].reshape(-1,1),f_dat)))
+        if VMD:
+            n_col = 4
+            color.writeVMD('%s_%d%d%d.tcl'%(prefix,trip[0],trip[1],trip[2]), self.filenames, colors, trip, n_col,
+                           sigma=sigma, swap=('/home/wfr/','/Users/wfr/mountpoint/'))
     def buildDMap(self):
         if self.master:
+            self.dmap = dmap.DMap()
             self.dmap.set_params()
             self.dmap.build(self.dists,landmarks=self.lm_idx)
             print('Diffusion map construction complete')

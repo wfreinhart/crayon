@@ -9,6 +9,7 @@ from crayon import _crayon
 import color
 import nga
 import neighborlist
+import io
 try:
     import dmap
 except:

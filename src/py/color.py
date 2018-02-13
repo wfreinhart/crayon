@@ -96,8 +96,7 @@ def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,file_type='hoomd',swa
                     'mol modcolor 1 top user',
                     'mol scaleminmax top 1 0 1023',
                     'mol selupdate 1 top 1',
-                    'mol colupdate 1 top 1',
-                    'mol off top']
+                    'mol colupdate 1 top 1']
             for cmd in cmds:
                 print(cmd,file=fid)
         prev = frame_run
