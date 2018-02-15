@@ -38,6 +38,8 @@ include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/include)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/libgraph/include)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/src)
 include_directories(${PROJECT_SOURCE_DIR}/voro++)
+include_directories(${PROJECT_SOURCE_DIR}/pyemd)
+include_directories(${PROJECT_SOURCE_DIR}/fastEMD)
 
 set(CRAYON_DEST "${CMAKE_INSTALL_PREFIX}/crayon")
 SET(CMAKE_SKIP_BUILD_RPATH FALSE)
@@ -48,6 +50,8 @@ LIST(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CRAYON_DEST}/lib" isSystem
 IF("${isSystemDir}" STREQUAL "-1")
    SET(CMAKE_INSTALL_RPATH "${CRAYON_DEST}/lib")
 ENDIF("${isSystemDir}" STREQUAL "-1")
+
+# build fastEMD library (?)
 
 # build voro++ library
 file(GLOB SRC_VOROPP "voro++/voro++/voro++.cc")

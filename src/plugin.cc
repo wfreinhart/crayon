@@ -10,9 +10,11 @@
 
 #include "crayon.h"
 
-#include "PyGraph.h"
 #include "Comparison.h"
+#include "EMD.h"
 #include "Neighbors.h"
+#include "PyGraph.h"
+
 
 PYBIND11_MODULE(_crayon, m)
     {
@@ -23,9 +25,10 @@ PYBIND11_MODULE(_crayon, m)
         using namespace crayon;
 
         // export to python via pybind11
-        export_PyGraph(m);
         export_Comparison(m);
+        export_EMD(m);
         export_VoroNeighbors(m);
+        export_PyGraph(m);
 
         } // end namespace crayon
     }
