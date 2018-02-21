@@ -155,8 +155,16 @@ class Snapshot:
         self.lookup = None
         # load from file
         if reader is None:
-            self.load(reader_input)
-            return None
+            try:
+                self.load(reader_input)
+                return None
+            except:
+                if '.xml' in filename:
+                    reader = io.readXML
+                elif '.gsd' in filename:
+                    reader = io.readGSD
+                elif '.xyz' in filename:
+                    reader = io.readXYZ
         # read from generator function
         reader(self,reader_input)
         # check for valid periodic boundary conditions
@@ -224,11 +232,7 @@ class Ensemble:
             filename = self.filenames[f]
             print('rank %d of %d will process %s'%(self.rank,self.size,filename))
             # create snapshot instance and build neighborhoods
-            if '.xml' in filename:
-                reader = io.readXML
-            elif '.gsd' in filename:
-                reader = io.readGSD
-            snap = Snapshot(filename,reader=reader,pbc='xyz',nl=nl)
+            snap = Snapshot(filename,,pbc='xyz',nl=nl)
             self.insert(f,snap)
             snap.save(filename + '.nga',adjacency=True,neighbors=True)
         print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.library.graphs)))
@@ -268,7 +272,7 @@ class Ensemble:
             self.sigs[val] = key
         self.graphs = [self.library.graphs[s] for s in self.sigs]
         n = len(self.sigs)
-        counts = np.array([self.library.counts[s] for s in self.sigs])
+        self.counts = np.array([self.library.counts[s] for s in self.sigs])
         self.lm_idx = np.argwhere(np.array([self.library.counts[s] for s in self.sigs]) >= min_freq).flatten()
         m = len(self.lm_idx)
         self.lm_sigs = [s for s in self.sigs if self.library.counts[s] >= min_freq]
@@ -353,3 +357,4 @@ class Ensemble:
             self.dmap.set_params()
             self.dmap.build(self.dists,landmarks=self.lm_idx)
             print('Diffusion map construction complete')
+            self.dmap.write()

@@ -36,7 +36,7 @@ def neighborSimilarity(f_map,neighbors,coords):
         f_dat[i,2] = np.mean(f_dat[nn,0])
     return f_dat
 
-def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,file_type='hoomd',swap=('',''),mode='add'):
+def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='add'):
     # create a VMD draw script
     fid = open(filename,'w')
     cmds = ['axes location off',
@@ -61,10 +61,14 @@ def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,file_type='hoomd',swa
         xml_prefix = frame.replace(swap[0],swap[1])
         frame_run = frame.split('.')[0]
         if frame_run != prev or mode == "new":
-            print('mol new %s type %s'%(xml_prefix,file_type),file=fid)
+            if '.xml' in xml_prefix:
+                on_load = 'type hoomd'
+            else:
+                on_load = ''
+            print('mol new %s %s'%(xml_prefix,on_load),file=fid)
             newFrame = True
         else:
-            print('mol addfile %s type %s'%(xml_prefix,file_type),file=fid)
+            print('mol addfile %s %s'%(xml_prefix,on_load),file=fid)
             newFrame = False
         cmds = ['[atomselect top "all"] set radius %f'%(0.50*sigma),
                 'set fid [open "%s'%xml_prefix + '_%d%d%d.cmap"]'%com,
