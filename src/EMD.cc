@@ -46,7 +46,8 @@ double fastEMD(const Eigen::VectorXd &P, const Eigen::VectorXd &Q)
             dists[i][j] = std::abs(double(j)-double(i));
             }
         }
-    return emd_hat_gd_metric<double>()(pvec, qvec, dists);
+    double d = emd_hat_gd_metric<double>()(pvec, qvec, dists);
+    return d;
     }
 
 // double fastEMD(const std::vector<std::vector<double>> D)
@@ -71,8 +72,9 @@ double fastEMD(const std::vector<std::vector<double>> dists)
     {
     std::vector<double> pvec(dists.size(), 1./dists.size());
     std::vector<double> qvec(dists[0].size(), 1./dists[0].size());
-    std::vector<std::vector<double>> flows(pvec.size(), std::vector<double>(qvec.size(), 0.));
-    double extra_mass_penalty = -1.;
+    unsigned int n = std::max(pvec.size(),qvec.size());
+    std::vector<std::vector<double>> flows(n, std::vector<double>(n, 0.));
+    double extra_mass_penalty = 0.;
     double d = emd_hat_gd_metric<double, WITHOUT_EXTRA_MASS_FLOW>()(pvec, qvec, dists, extra_mass_penalty, &flows);
     double r = 0.;
     double s = 0.;
@@ -84,7 +86,6 @@ double fastEMD(const std::vector<std::vector<double>> dists)
             s += flows[i][j];
             }
         }
-    std::cout << std::endl << d << ", " << r << ", " << s << std::endl;
     return r / s;
     }
 
