@@ -155,6 +155,7 @@ class Snapshot:
         self.lookup = None
         # load from file
         if reader is None:
+            filename = reader_input
             try:
                 self.load(reader_input)
                 return None
@@ -209,8 +210,10 @@ class Snapshot:
             buff = pickle.load(fid)
         if 'neighbors' in buff:
             self.neighbors = buff['neighbors']
+            self.N = len(self.neighbors)
         if 'adjacency' in buff:
             self.adjacency = buff['adjacency']
+            self.N = len(self.adjacency)
         if 'library' in buff:
             self.library = buff['library']
             self.lookup = buff['lookup']
@@ -232,7 +235,7 @@ class Ensemble:
             filename = self.filenames[f]
             print('rank %d of %d will process %s'%(self.rank,self.size,filename))
             # create snapshot instance and build neighborhoods
-            snap = Snapshot(filename,,pbc='xyz',nl=nl)
+            snap = Snapshot(filename,pbc='xyz',nl=nl)
             self.insert(f,snap)
             snap.save(filename + '.nga',adjacency=True,neighbors=True)
         print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.library.graphs)))
@@ -284,7 +287,7 @@ class Ensemble:
         frame_maps = []
         for f in frames:
             N = np.sum(np.asarray([len(val) for key, val in self.lookups[f].items()]))
-            frame_data = np.zeros(N)
+            frame_data = np.zeros(N,dtype=np.int)
             for key, val in self.lookups[f].items():
                 frame_data[np.asarray(val,dtype=np.int)] = c_map[self.library.index[key]]
             frame_maps.append(frame_data)
@@ -313,14 +316,14 @@ class Ensemble:
                 d = result_list[k]
                 self.dists[i,jid] = d
             self.dists = self.dists / np.max(self.dists)
-    def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False):
+    def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
         coms = None
         if self.master:
             coms, best = self.dmap.uncorrelatedTriplets()
             print('probable best eigenvector triplet is %s'%str(coms[best]))
         coms = self.p.shareData(coms)
-        self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito)
-    def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False):
+        self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito,similarity=similarity)
+    def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
         # share data among workers
         colors = []
         frame_maps = []
@@ -340,7 +343,10 @@ class Ensemble:
             filename = self.filenames[f]
             snap = Snapshot(filename + '.nga')
             for t, trip in enumerate(trips):
-                sim = color.neighborSimilarity(frame_maps[t][f],snap.neighbors,color_coords[:,np.array(trip)])
+                if similarity:
+                    sim = color.neighborSimilarity(frame_maps[t][f],snap.neighbors,color_coords[:,np.array(trip)])
+                else:
+                    sim = color_coords[frame_maps[t][f].reshape(-1,1),np.array(trip)]
                 f_dat = np.hstack((frame_maps[t][f].reshape(-1,1),sim))
                 np.savetxt(filename + '_%d%d%d.cmap'%trip, f_dat)
         if not self.master:
