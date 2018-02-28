@@ -21,10 +21,25 @@ try:
 except:
     foundGSD = False
 
+def readXYZ(snap,reader_input):
+    filename = reader_input
+    # read values from file
+    with open(filename,'r') as config:
+        lines = config.readlines()
+    N = int(lines[0])
+    L = np.asarray([float(x) for x in lines[1].replace('Lattice=','').replace('"','').split()[::4]])
+    R = np.zeros((N,3))
+    for i, l in enumerate(lines[2:]):
+        R[i,:] = [float(x) for x in l.split()[1:]]
+    # assign values to Snapshot
+    snap.N = len(R)
+    snap.xyz = R
+    snap.L = L
+
 def readXML(snap,reader_input):
     filename = reader_input
     # read values from file
-    config  = open(filename,'rb+')
+    config  = open(filename,'r')
     tree = etree.parse(config)
     root = tree.getroot()
     elem = root.getiterator("box")[0]

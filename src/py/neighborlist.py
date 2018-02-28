@@ -21,30 +21,32 @@ except:
     print('Warning: freud python module not found, neighborlist.AdaptiveCNA will not be available')
     foundFreud = False
 
-# builds an adjacency matrix from the nearest neighbor list
-def neighborsToAdjacency(i, NL):
-    n = len(NL[i])
-    A = np.zeros((n,n),np.int8)
-    idx = NL[i].flatten()
-    for j in range(len(idx)):
-        for k in range(len(idx)):
-            A[j,k] = int( (idx[k] in NL[idx[j]].flatten()) or j == k )
-    # include central particle in adjacency matrix
-    A = np.hstack((A,np.ones((n,1))))
-    A = np.vstack((A,np.ones((1,n+1))))
-    return A
-
 class NeighborList:
-    def __init__(self):
+    def __init__(self,second_shell=False):
+        self.second_shell = second_shell
         self.setParams()
     def setParams(self):
         pass
     def getNeighbors(self,snap):
         return []
+    # builds an adjacency matrix from the nearest neighbor list
+    def particleAdjacency(i, NL):
+        idx = NL[i].flatten()
+        if self.second_shell:
+            shell2 = []
+            for j in range(len(idx)):
+                shell2 += list(NL[idx[j]])
+            idx = np.asarray(list(set(shell2)),dtype=np.int)
+        n = len(idx)
+        A = np.zeros((n,n),np.int8)
+        for j in range(len(idx)):
+            for k in range(len(idx)):
+                A[j,k] = int( (idx[k] in NL[idx[j]].flatten()) or j == k )
+        return A
     def getAdjacency(self,snap):
         adjacency = []
         for i in range(snap.N):
-            adjacency.append(neighborsToAdjacency(i,snap.neighbors))
+                adjacency.append(self.particleAdjacency(i,snap.neighbors))
         return adjacency
 
 class AdaptiveCNA(NeighborList):
@@ -94,7 +96,7 @@ class Voronoi(NeighborList):
         Z = hierarchy.linkage(X,self.cluster_method)
         c = hierarchy.fcluster(Z,self.cluster_ratio*d_nbr[0],criterion='distance')
         h_base = np.argwhere(c == c[0]).flatten()
-        nn = nn[h_base]
+        nn = np.hstack(([idx],nn[h_base]))
         return nn
     # compute Delaunay triangulation with Voro++ library
     def getNeighbors(self,snap):

@@ -6,9 +6,6 @@
 # This file is part of the crayon project, released under the Modified BSD License.
 
 from __future__ import print_function
-import sys
-import inspect
-import pickle
 
 from crayon import _crayon
 from crayon import parallel
@@ -19,6 +16,12 @@ from crayon import dmap
 
 import numpy as np
 from emd import emd
+
+try:
+    import pickle
+    allow_binary = True
+except:
+    allow_binary = False
 
 try:
     import zlib
@@ -40,16 +43,13 @@ class Graph:
         self.adj = self.C.adj()
         # compute its Graphlet Degree Distribution
         self.gdd = self.C.gdd()
-        # compute and normalize its Graphlet Degree Vector
+        # compute its Graphlet Degree Vector
         self.gdv = self.C.gdv()
-        s = np.sum(self.gdv,1)
-        s[s==0] = 1.
-        self.ngdv = self.gdv # / np.transpose( s * np.ones((self.gdv.shape[1],1)))
     def __sub__(self,other):
         R""" difference between this and another Graph, defined as the Earth Mover's Distance
-        between normalized Graphlet Degree Vectors
+        between Graphlet Degree Vectors
         """
-        return emd(self.ngdv,other.ngdv)
+        return emd(self.gdv,other.gdv)
     def __eq__(self,other):
         R""" equality comparison between this and another Graph; checks if A - B == 0
         """
@@ -155,8 +155,17 @@ class Snapshot:
         self.lookup = None
         # load from file
         if reader is None:
-            self.load(reader_input)
-            return None
+            filename = reader_input
+            try:
+                self.load(reader_input)
+                return None
+            except:
+                if '.xml' in filename:
+                    reader = io.readXML
+                elif '.gsd' in filename:
+                    reader = io.readGSD
+                elif '.xyz' in filename:
+                    reader = io.readXYZ
         # read from generator function
         reader(self,reader_input)
         # check for valid periodic boundary conditions
@@ -201,8 +210,10 @@ class Snapshot:
             buff = pickle.load(fid)
         if 'neighbors' in buff:
             self.neighbors = buff['neighbors']
+            self.N = len(self.neighbors)
         if 'adjacency' in buff:
             self.adjacency = buff['adjacency']
+            self.N = len(self.adjacency)
         if 'library' in buff:
             self.library = buff['library']
             self.lookup = buff['lookup']
@@ -224,11 +235,7 @@ class Ensemble:
             filename = self.filenames[f]
             print('rank %d of %d will process %s'%(self.rank,self.size,filename))
             # create snapshot instance and build neighborhoods
-            if '.xml' in filename:
-                reader = io.readXML
-            elif '.gsd' in filename:
-                reader = io.readGSD
-            snap = Snapshot(filename,reader=reader,pbc='xyz',nl=nl)
+            snap = Snapshot(filename,pbc='xyz',nl=nl)
             self.insert(f,snap)
             snap.save(filename + '.nga',adjacency=True,neighbors=True)
         print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.library.graphs)))
@@ -268,7 +275,7 @@ class Ensemble:
             self.sigs[val] = key
         self.graphs = [self.library.graphs[s] for s in self.sigs]
         n = len(self.sigs)
-        counts = np.array([self.library.counts[s] for s in self.sigs])
+        self.counts = np.array([self.library.counts[s] for s in self.sigs])
         self.lm_idx = np.argwhere(np.array([self.library.counts[s] for s in self.sigs]) >= min_freq).flatten()
         m = len(self.lm_idx)
         self.lm_sigs = [s for s in self.sigs if self.library.counts[s] >= min_freq]
@@ -280,7 +287,7 @@ class Ensemble:
         frame_maps = []
         for f in frames:
             N = np.sum(np.asarray([len(val) for key, val in self.lookups[f].items()]))
-            frame_data = np.zeros(N)
+            frame_data = np.zeros(N,dtype=np.int)
             for key, val in self.lookups[f].items():
                 frame_data[np.asarray(val,dtype=np.int)] = c_map[self.library.index[key]]
             frame_maps.append(frame_data)
@@ -309,14 +316,14 @@ class Ensemble:
                 d = result_list[k]
                 self.dists[i,jid] = d
             self.dists = self.dists / np.max(self.dists)
-    def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False):
+    def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
         coms = None
         if self.master:
             coms, best = self.dmap.uncorrelatedTriplets()
             print('probable best eigenvector triplet is %s'%str(coms[best]))
         coms = self.p.shareData(coms)
-        self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito)
-    def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False):
+        self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito,similarity=similarity)
+    def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
         # share data among workers
         colors = []
         frame_maps = []
@@ -336,7 +343,10 @@ class Ensemble:
             filename = self.filenames[f]
             snap = Snapshot(filename + '.nga')
             for t, trip in enumerate(trips):
-                sim = color.neighborSimilarity(frame_maps[t][f],snap.neighbors,color_coords[:,np.array(trip)])
+                if similarity:
+                    sim = color.neighborSimilarity(frame_maps[t][f],snap.neighbors,color_coords[:,np.array(trip)])
+                else:
+                    sim = color_coords[frame_maps[t][f].reshape(-1,1),np.array(trip)]
                 f_dat = np.hstack((frame_maps[t][f].reshape(-1,1),sim))
                 np.savetxt(filename + '_%d%d%d.cmap'%trip, f_dat)
         if not self.master:
@@ -353,3 +363,4 @@ class Ensemble:
             self.dmap.set_params()
             self.dmap.build(self.dists,landmarks=self.lm_idx)
             print('Diffusion map construction complete')
+            self.dmap.write()
