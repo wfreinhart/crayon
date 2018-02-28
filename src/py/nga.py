@@ -6,9 +6,6 @@
 # This file is part of the crayon project, released under the Modified BSD License.
 
 from __future__ import print_function
-import sys
-import inspect
-import pickle
 
 from crayon import _crayon
 from crayon import parallel
@@ -19,6 +16,12 @@ from crayon import dmap
 
 import numpy as np
 from emd import emd
+
+try:
+    import pickle
+    allow_binary = True
+except:
+    allow_binary = False
 
 try:
     import zlib
