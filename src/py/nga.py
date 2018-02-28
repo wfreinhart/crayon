@@ -40,16 +40,13 @@ class Graph:
         self.adj = self.C.adj()
         # compute its Graphlet Degree Distribution
         self.gdd = self.C.gdd()
-        # compute and normalize its Graphlet Degree Vector
+        # compute its Graphlet Degree Vector
         self.gdv = self.C.gdv()
-        s = np.sum(self.gdv,1)
-        s[s==0] = 1.
-        self.ngdv = self.gdv # / np.transpose( s * np.ones((self.gdv.shape[1],1)))
     def __sub__(self,other):
         R""" difference between this and another Graph, defined as the Earth Mover's Distance
-        between normalized Graphlet Degree Vectors
+        between Graphlet Degree Vectors
         """
-        return emd(self.ngdv,other.ngdv)
+        return emd(self.gdv,other.gdv)
     def __eq__(self,other):
         R""" equality comparison between this and another Graph; checks if A - B == 0
         """
