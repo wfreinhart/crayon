@@ -13,7 +13,6 @@ import numpy as np
 from crayon import _crayon
 
 from scipy.cluster import hierarchy
-from scipy.spatial import ConvexHull
 
 try:
     import freud
@@ -22,67 +21,32 @@ except:
     print('Warning: freud python module not found, neighborlist.AdaptiveCNA will not be available')
     foundFreud = False
 
-# builds an adjacency matrix from the nearest neighbor list
-def neighborsToAdjacency(i, NL, second_shell=False):
-    idx = NL[i].flatten()
-    if second_shell:
-        shell2 = []
-        for j in range(len(idx)):
-            shell2 += list(NL[idx[j]])
-        idx = np.asarray(list(set(shell2)),dtype=np.int)
-    n = len(idx)
-    A = np.zeros((n,n),np.int8)
-    for j in range(len(idx)):
-        for k in range(len(idx)):
-            A[j,k] = int( (idx[k] in NL[idx[j]].flatten()) or j == k )
-    return A
-
-# builds an adjacency matrix from the nearest neighbor list
-def neighborHullToAdjacency(i, snap, second_shell=False):
-    NL = snap.neighbors
-    idx = NL[i].flatten()
-    if second_shell:
-        shell2 = []
-        for j in range(len(idx)):
-            shell2 += list(NL[idx[j]])
-        idx = np.asarray(list(set(shell2)),dtype=np.int)
-    n = len(idx)
-    A = np.zeros((n,n),np.int8)
-    for j in range(len(idx)):
-        for k in range(len(idx)):
-            A[j,k] = int( (idx[k] in NL[idx[j]].flatten()) or j == k )
-    # need at least 4 points to generate convex hull
-    if len(idx) < 4:
-        return A
-    # compute convex hull and include edges in adjacency
-    points = snap.xyz[idx,:] - snap.xyz[i,:]
-    pbc = np.asarray([dim in snap.pbc for dim in 'xyz'],dtype=np.float)
-    points -= snap.L * np.round( points / snap.L * pbc)
-    hull = ConvexHull(points)
-    simplex_it = np.array([[0,1],[1,2],[2,0]])
-    for s in hull.simplices:
-        for e in simplex_it:
-            j, k = tuple(s[e])
-            A[j,k] = 1
-            A[k,j] = 1
-    return A
-
 class NeighborList:
-    def __init__(self,second_shell=False,use_hull=False):
+    def __init__(self,second_shell=False):
         self.second_shell = second_shell
-        self.use_hull = use_hull
         self.setParams()
     def setParams(self):
         pass
     def getNeighbors(self,snap):
         return []
+    # builds an adjacency matrix from the nearest neighbor list
+    def particleAdjacency(i, NL):
+        idx = NL[i].flatten()
+        if self.second_shell:
+            shell2 = []
+            for j in range(len(idx)):
+                shell2 += list(NL[idx[j]])
+            idx = np.asarray(list(set(shell2)),dtype=np.int)
+        n = len(idx)
+        A = np.zeros((n,n),np.int8)
+        for j in range(len(idx)):
+            for k in range(len(idx)):
+                A[j,k] = int( (idx[k] in NL[idx[j]].flatten()) or j == k )
+        return A
     def getAdjacency(self,snap):
         adjacency = []
         for i in range(snap.N):
-            if self.use_hull:
-                adjacency.append(neighborHullToAdjacency(i,snap,second_shell=self.second_shell))
-            else:
-                adjacency.append(neighborsToAdjacency(i,snap.neighbors,second_shell=self.second_shell))
+                adjacency.append(self.particleAdjacency(i,snap.neighbors))
         return adjacency
 
 class AdaptiveCNA(NeighborList):
