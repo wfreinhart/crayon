@@ -30,22 +30,23 @@ class ValidateEMD(unittest.TestCase):
         pass
 
     def testValidationEMD(self):
-        #
-        # d = np.asarray( _crayon.emd_dists(gdvList[0],gdvList[1]) )
-        # pyemds = np.zeros(d.shape)
-        # for i in range(d.shape[0]):
-        #     for j in range(d.shape[1]):
-        #         a = np.asarray([gdvList[0][i]], dtype=np.double)
-        #         a /= np.sum(a)
-        #         b = np.asarray([gdvList[1][j]], dtype=np.double)
-        #         b /= np.sum(b)
-        #         pyemds[i,j] = emd(a,b)
-        # print(d)
-        # print(pyemds)
-        #
+
+        n = len(gdvList)
+        crayon_emd = np.zeros((n,n))
+        py_emd = np.zeros((n,n))
+        for i, P in enumerate(gdvList):
+            for j, Q in enumerate(gdvList):
+                # if i == j:
+                    # continue
+                crayon_emd[i,j] = _crayon.emd(P,Q)
+                py_emd[i,j] = emd(P,Q)
+                print(i,j,':',crayon_emd[i,j],py_emd[i,j])
+
+        np.testing.assert_array_almost_equal(crayon_emd,py_emd)
+
         # d = _crayon.emd_dists(gdvList[0],gdvList[1])
         # np.testing.assert_array_almost_equal(d,distAB)
-        d = _crayon.emd(gdvList[0],gdvList[1])
+        # d = _crayon.emd(gdvList[0],gdvList[1])
         # self.assertAlmostEqual(d,2.660116954218473,10)
         #
         # d = _crayon.emd_dists(gdvList[2],gdvList[3])

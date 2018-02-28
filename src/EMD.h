@@ -17,18 +17,10 @@
 
 #include <c_emd/emd.h>
 
-#include <fastEMD/emd_hat.hpp>
-
 namespace crayon
 {
 
-std::vector<std::vector<double>> EMDdists(const Eigen::MatrixXi &P, const Eigen::MatrixXi &Q);
-
-double EMD(const Eigen::MatrixXi &P, const Eigen::MatrixXi &Q);
-
-double fastEMD(const Eigen::VectorXd &P, const Eigen::VectorXd &Q);
-
-double fastEMD(const std::vector<std::vector<double>> dists);
+double EMD(const Eigen::MatrixXd &P, const Eigen::MatrixXd &Q);
 
 void export_EMD(pybind11::module& m);
 

@@ -39,7 +39,7 @@ include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/libgraph/include)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/src)
 include_directories(${PROJECT_SOURCE_DIR}/voro++)
 include_directories(${PROJECT_SOURCE_DIR}/pyemd)
-include_directories(${PROJECT_SOURCE_DIR}/fastEMD)
+include_directories(${PROJECT_SOURCE_DIR}/pyemd/c_emd)
 
 set(CRAYON_DEST "${CMAKE_INSTALL_PREFIX}/crayon")
 SET(CMAKE_SKIP_BUILD_RPATH FALSE)
@@ -51,7 +51,9 @@ IF("${isSystemDir}" STREQUAL "-1")
    SET(CMAKE_INSTALL_RPATH "${CRAYON_DEST}/lib")
 ENDIF("${isSystemDir}" STREQUAL "-1")
 
-# build fastEMD library (?)
+# build pyemd library
+file(GLOB SRC_PYEMD "pyemd/c_emd/emd.c")
+add_library(pyemd SHARED ${SRC_PYEMD})
 
 # build voro++ library
 file(GLOB SRC_VOROPP "voro++/voro++/voro++.cc")
@@ -72,6 +74,7 @@ file(GLOB SRC_CRAYON "src/*.cc")
 add_library(crayon SHARED ${SRC_CRAYON})
 target_link_libraries(crayon
 	              voropp
+                      pyemd
                       orca
                       graphlet
 )
@@ -79,6 +82,7 @@ set_target_properties(crayon PROPERTIES PREFIX "_")
 set_target_properties(crayon PROPERTIES SUFFIX ".so")
 
 # install C++ libraries
+install(TARGETS pyemd DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS voropp DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS orca DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS graphlet DESTINATION "${CRAYON_DEST}/lib")

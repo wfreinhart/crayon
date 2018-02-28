@@ -11,87 +11,32 @@
 namespace crayon
 {
 
-std::vector<std::vector<double>> EMDdists(const Eigen::MatrixXi &P, const Eigen::MatrixXi &Q)
+double EMD(const Eigen::MatrixXd &P, const Eigen::MatrixXd &Q)
     {
-    std::vector<std::vector<double>> dists(P.rows(), std::vector<double>(Q.rows(), 0.));
-    for( unsigned int i = 0; i < P.rows(); i++ )
+    int n_x = P.rows();
+    int n_y = Q.rows();
+    double *weight_x = (double *) malloc(n_x * sizeof(double));
+    for( int i = 0; i < n_x; i++ ) { weight_x[i] = 1./n_x; }
+    double *weight_y = (double *) malloc(n_y * sizeof(double));
+    for( int j = 0; j < n_y; j++ ) { weight_y[j] = 1./n_y; }
+    double **cost = (double **) malloc(n_x * sizeof(double *));
+    for( int i = 0; i < n_x; i++ )
         {
-        Eigen::VectorXd phist = P.row(i).cast<double>();
-        phist /= phist.sum();
-        for( unsigned int j = 0; j < Q.rows(); j++ )
+        cost[i] = new double[n_y];
+        for( int j = 0; j < n_y; j++ )
             {
-            Eigen::VectorXd qhist = Q.row(j).cast<double>();
-            qhist /= qhist.sum();
-            dists[i][j] = fastEMD(phist,qhist);
+            // use Euclidean distance between 73-dimensional graphlet histograms
+            Eigen::VectorXd delta = P.row(i) - Q.row(j);
+            cost[i][j] = sqrt( delta.dot(delta) );
             }
         }
-    return dists;
-    }
-
-double EMD(const Eigen::MatrixXi &P, const Eigen::MatrixXi &Q)
-    {
-    std::vector<std::vector<double>> dists = EMDdists(P,Q);
-    return fastEMD(dists);
-    }
-
-double fastEMD(const Eigen::VectorXd &P, const Eigen::VectorXd &Q)
-    {
-    std::vector<double> pvec(P.data(), P.data() + P.size());
-    std::vector<double> qvec(Q.data(), Q.data() + Q.size());
-    std::vector<std::vector<double>> dists(pvec.size(), std::vector<double>(qvec.size(), 0.));
-    for( unsigned int i = 0; i < pvec.size(); i++ )
-        {
-        for( unsigned int j = 0; j < qvec.size(); j++ )
-            {
-            dists[i][j] = std::abs(double(j)-double(i));
-            }
-        }
-    double d = emd_hat_gd_metric<double>()(pvec, qvec, dists);
+    double **flows_data_ptr = NULL;
+    double d = emd(n_x, weight_x, n_y, weight_y, cost, flows_data_ptr);
     return d;
-    }
-
-// double fastEMD(const std::vector<std::vector<double>> D)
-//     {
-//     unsigned int n = std::max(D.size(),D[0].size());
-//     std::vector<std::vector<double>> dists(D.size(), std::vector<double>(D[0].size(), 0.));
-//     for( unsigned int i = 0; i < D.size(); i++ )
-//         {
-//         for( unsigned int j = 0; j < D[i].size(); j++ )
-//             {
-//             dists[i][j] = D[i][j];
-//             }
-//         }
-//     std::vector<double> pvec(n, 0.);
-//     for( unsigned int i = 0; i < D.size(); i ++ ) pvec[i] = 1. / D.size();
-//     std::vector<double> qvec(n, 0.);
-//     for( unsigned int j = 0; j < D[0].size(); j ++ ) qvec[j] = 1. / D[0].size();
-//     return emd_hat_gd_metric<double>()(pvec, qvec, dists);
-//     }
-
-double fastEMD(const std::vector<std::vector<double>> dists)
-    {
-    std::vector<double> pvec(dists.size(), 1./dists.size());
-    std::vector<double> qvec(dists[0].size(), 1./dists[0].size());
-    unsigned int n = std::max(pvec.size(),qvec.size());
-    std::vector<std::vector<double>> flows(n, std::vector<double>(n, 0.));
-    double extra_mass_penalty = 0.;
-    double d = emd_hat_gd_metric<double, WITHOUT_EXTRA_MASS_FLOW>()(pvec, qvec, dists, extra_mass_penalty, &flows);
-    double r = 0.;
-    double s = 0.;
-    for( unsigned int i = 0; i < dists.size(); i++ )
-        {
-        for( unsigned int j = 0; j < dists[i].size(); j++ )
-            {
-            r += dists[i][j] * flows[i][j];
-            s += flows[i][j];
-            }
-        }
-    return r / s;
     }
 
 void export_EMD(pybind11::module& m)
     {
-    m.def("emd_dists",&EMDdists);
     m.def("emd",&EMD);
     }
 

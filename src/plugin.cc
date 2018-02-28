@@ -15,7 +15,6 @@
 #include "Neighbors.h"
 #include "PyGraph.h"
 
-
 PYBIND11_MODULE(_crayon, m)
     {
     m.doc() = "C++ bindings for crayon: a template-free crystal structure analysis";
