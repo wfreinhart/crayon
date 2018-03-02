@@ -30,13 +30,14 @@ class NeighborList:
     def getNeighbors(self,snap):
         return []
     # builds an adjacency matrix from the nearest neighbor list
-    def particleAdjacency(i, NL):
+    def particleAdjacency(self,i, NL):
         idx = NL[i].flatten()
         if self.second_shell:
             shell2 = []
             for j in range(len(idx)):
                 shell2 += list(NL[idx[j]])
             idx = np.asarray(list(set(shell2)),dtype=np.int)
+        idx = np.sort(idx) # enforce deterministic ordering
         n = len(idx)
         A = np.zeros((n,n),np.int8)
         for j in range(len(idx)):
