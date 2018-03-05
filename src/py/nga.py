@@ -45,11 +45,14 @@ class Graph:
         self.gdd = self.C.gdd()
         # compute its Graphlet Degree Vector
         self.gdv = self.C.gdv()
+        s = np.sum(self.gdv,1)
+        s[s==0] = 1.
+        self.ngdv = self.gdv / np.transpose( s * np.ones((self.gdv.shape[1],1)))
     def __sub__(self,other):
         R""" difference between this and another Graph, defined as the Earth Mover's Distance
         between Graphlet Degree Vectors
         """
-        return emd(self.gdv,other.gdv)
+        return emd(self.ngdv,other.ngdv)
     def __eq__(self,other):
         R""" equality comparison between this and another Graph; checks if A - B == 0
         """
@@ -77,20 +80,19 @@ class GraphLibrary:
         (None)
     """
     def __init__(self):
-        self.graphs = {}
-        self.counts = {}
+        self.sigs   = []
+        self.graphs = []
+        self.counts = np.array([])
         self.index = {}
-        self.sigs = []
     def build(self,neighborhoods):
-        nn_idx = []
+        nn_idx = np.zeros(len(neighborhoods),dtype=np.int)
         for i, nn in enumerate(neighborhoods):
             G = Graph(nn)
-            nn_idx.append(self.encounter(G))
-        nn_idx = np.asarray(nn_idx,dtype=np.int)
+            nn_idx[i] = self.encounter(G)
         nn_lookup = {}
-        for i, sig in enumerate(self.graphs.keys()):
+        for i, sig in enumerate(self.sigs):
             if sig not in nn_lookup:
-                nn_lookup[sig] = np.array([])
+                nn_lookup[sig] = np.array([],dtype=np.int)
             nn_lookup[sig] = np.hstack((nn_lookup[sig],np.argwhere(nn_idx==self.index[sig]).flatten()))
         return nn_lookup
     def find(self,G):
@@ -111,19 +113,21 @@ class GraphLibrary:
             idx (int): the index of this Graph (signature) in the library
         """
         sig = str(G)
-        idx = None
         try:
-            self.counts[sig] += count
+            idx = self.index[sig]
+            self.counts[idx] += count
         except:
-            self.index[sig] = len(self.graphs)
-            self.graphs[sig] = G
-            self.counts[sig] = count
-        if self.graphs[sig] != G:
+            idx = len(self.graphs)
+            self.sigs.append(sig)
+            self.graphs.append(G)
+            self.counts = np.append(self.counts,count)
+            self.index[sig] = idx
+        if self.graphs[idx] != G:
             print(G.adj)
-            print(self.graphs[sig].adj)
-            print(self.graphs[sig] - G)
+            print(self.graphs[idx].adj)
+            print(self.graphs[idx] - G)
             raise RuntimeError('Found degenerate GDD: \n%s\n'%sig)
-        return self.index[sig]
+        return idx
     def collect(self,others,counts=True):
         R""" merges other GraphLibrary objects into this one
 
@@ -136,8 +140,8 @@ class GraphLibrary:
             raise TypeError('GraphLibrary.collect expects a list of GraphLibrary objects')
         # iterate over supplied library instances
         for other in others:
-            for sig in other.graphs.keys():
-                self.encounter(other.graphs[sig],count=(other.counts[sig] if counts else 0))
+            for idx in range(len(other.graphs)):
+                self.encounter(other.graphs[idx],count=(other.counts[idx] if counts else 0))
 
 class Snapshot:
     R""" identifies neighborhoods from simulation snapshot
@@ -192,8 +196,17 @@ class Snapshot:
             self.buildAdjacency()
         self.lookup = self.library.build(self.adjacency)
     def mapTo(self,library):
+        if type(library) != type(GraphLibrary()):
+            raise ValueError('must supply a GraphLibrary object')
+        m = np.zeros(self.N,dtype=np.int) * np.nan
         for sig, idx in self.lookup.items():
-            pass
+            if sig in library.index:
+                m[idx] = library.index[sig]
+        return m
+    def wrap(self,v):
+        pbc = np.asarray([dim in self.pbc for dim in 'xyz'],dtype=np.float)
+        w = v - self.L * np.round( v / self.L * pbc)
+        return w
     def save(self,filename,neighbors=False,adjacency=False,library=False):
         buff = {}
         if neighbors:
@@ -270,18 +283,13 @@ class Ensemble:
             min_freq = int(min_freq)
         except:
             raise RuntimeError('Must specify min_freq, and it must be castable to int')
-        self.sigs = ['' for i in self.library.index]
-        for key, val in self.library.index.items():
-            self.sigs[val] = key
-        self.graphs = [self.library.graphs[s] for s in self.sigs]
-        n = len(self.sigs)
-        self.counts = np.array([self.library.counts[s] for s in self.sigs])
-        self.lm_idx = np.argwhere(np.array([self.library.counts[s] for s in self.sigs]) >= min_freq).flatten()
+        n = len(self.library.sigs)
+        self.lm_idx = np.argwhere(self.library.counts >= min_freq).flatten()
         m = len(self.lm_idx)
-        self.lm_sigs = [s for s in self.sigs if self.library.counts[s] >= min_freq]
+        self.lm_sigs = [self.library.sigs[idx] for idx in self.lm_idx]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
     def getColorMaps(self,cidx):
-        c, c_map = color.compressColors(self.dmap.color_coords[:,cidx],delta=0.01)
+        c, c_map = color.compressColors(self.dmap.color_coords[:,cidx],delta=0.001)
         frames = self.lookups.keys()
         frames.sort()
         frame_maps = []
@@ -289,21 +297,21 @@ class Ensemble:
             N = np.sum(np.asarray([len(val) for key, val in self.lookups[f].items()]))
             frame_data = np.zeros(N,dtype=np.int)
             for key, val in self.lookups[f].items():
-                frame_data[np.asarray(val,dtype=np.int)] = c_map[self.library.index[key]]
+                frame_data[np.asarray(val,dtype=np.int)] = self.library.index[key]
             frame_maps.append(frame_data)
-        return c, frame_maps
+        return c, c_map, frame_maps
     def computeDists(self):
         # use a master-slave paradigm for load balancing
         task_list = []
         if self.master:
-            n = len(self.sigs)
+            n = len(self.library.sigs)
             m = len(self.lm_sigs)
             self.dists = np.zeros( (n,m) ) + np.Inf # designate null values with Inf
             for i in range(n):
                 for j in range(m):
                     task_list.append( (i,self.lm_idx[j]) )
         # perform graph matching in parallel using MPI
-        graphs = self.p.shareData(self.graphs)
+        graphs = self.p.shareData(self.library.graphs)
         eval_func = lambda task, data: data[task[0]] - data[task[1]]
         result_list = self.p.computeQueue(function=eval_func,
                                           tasks=task_list,
@@ -326,16 +334,19 @@ class Ensemble:
     def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
         # share data among workers
         colors = []
+        color_maps = []
         frame_maps = []
         color_coords = None
         if self.master:
             color_coords = self.dmap.color_coords
             for trip in trips:
-                c, f = self.getColorMaps(np.array(trip))
+                c, cm, fm = self.getColorMaps(np.array(trip))
                 colors.append(c)
-                frame_maps.append(f)
+                color_maps.append(cm)
+                frame_maps.append(fm)
         colors = self.p.shareData(colors)
         frame_maps = self.p.shareData(frame_maps)
+        color_maps = self.p.shareData(color_maps)
         color_coords = self.p.shareData(color_coords)
         # compute cluster similarity
         local_file_idx  = parallel.partition(range(len(self.filenames)))
@@ -347,7 +358,8 @@ class Ensemble:
                     sim = color.neighborSimilarity(frame_maps[t][f],snap.neighbors,color_coords[:,np.array(trip)])
                 else:
                     sim = color_coords[frame_maps[t][f].reshape(-1,1),np.array(trip)]
-                f_dat = np.hstack((frame_maps[t][f].reshape(-1,1),sim))
+                mapped_color = color_maps[t][frame_maps[t][f]].reshape(-1,1)
+                f_dat = np.hstack((mapped_color,sim))
                 np.savetxt(filename + '_%d%d%d.cmap'%trip, f_dat)
         if not self.master:
             return
