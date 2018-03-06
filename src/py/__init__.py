@@ -10,6 +10,7 @@ import color
 import nga
 import neighborlist
 import io
+import bondorder
 try:
     import dmap
 except:
