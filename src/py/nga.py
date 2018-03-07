@@ -233,6 +233,7 @@ class Snapshot:
 
 class Ensemble:
     def __init__(self):
+        self.filenames = []
         self.library = GraphLibrary()
         self.dmap = None
         self.lookups = {}
@@ -242,6 +243,8 @@ class Ensemble:
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
     def neighborhoodsFromFile(self,filenames,nl):
+        if type(filenames) == str:
+            filenames = [filenames]
         self.filenames = filenames
         local_file_idx  = parallel.partition(range(len(self.filenames)))
         for f in local_file_idx:
@@ -258,6 +261,15 @@ class Ensemble:
             snap.buildLibrary()
         self.library.collect(snap.library)
         self.lookups[idx] = snap.lookup
+    def backmap(self,idx):
+        N = 0
+        for sig, idx in lookups[idx].items():
+            N += len(val)
+        m = np.zeros(N,dtype=np.int) * np.nan
+        for sig, idx in lookups[idx].items():
+            if sig in library.index:
+                m[idx] = library.index[sig]
+        return np.array(m,dtype=np.int)
     def collect(self):
         others = self.p.gatherData(self)
         if not self.master:
