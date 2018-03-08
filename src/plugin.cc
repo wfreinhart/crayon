@@ -12,6 +12,8 @@
 
 #include "Comparison.h"
 #include "EMD.h"
+#include "EMDGPU.cuh"
+#include "EMDGPU.h"
 #include "Neighbors.h"
 #include "PyGraph.h"
 
@@ -26,6 +28,7 @@ PYBIND11_MODULE(_crayon, m)
         // export to python via pybind11
         export_Comparison(m);
         export_EMD(m);
+        export_EMDGPU(m);
         export_VoroNeighbors(m);
         export_PyGraph(m);
 

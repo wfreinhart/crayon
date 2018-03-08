@@ -30,6 +30,15 @@ find_package(PythonInterp REQUIRED)
 find_package(PythonLibsNew REQUIRED)
 find_package(Boost REQUIRED)
 
+find_package(CUDA REQUIRED)
+set(CUDA_NVCC_FLAGS "-gencode=arch=compute_30,code=sm_30
+                     -gencode=arch=compute_35,code=sm_35
+                     -gencode=arch=compute_50,code=sm_50
+                     -gencode=arch=compute_52,code=sm_52
+                     -gencode=arch=compute_60,code=sm_60
+                     -gencode=arch=compute_61,code=sm_61
+                     -gencode=arch=compute_61,code=compute_61")
+
 include_directories(${PYTHON_INCLUDE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/pybind11/include)
@@ -38,8 +47,8 @@ include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/include)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/libgraph/include)
 include_directories(${PROJECT_SOURCE_DIR}/libgraphlet/src)
 include_directories(${PROJECT_SOURCE_DIR}/voro++)
-include_directories(${PROJECT_SOURCE_DIR}/pyemd)
-include_directories(${PROJECT_SOURCE_DIR}/pyemd/c_emd)
+#include_directories(${PROJECT_SOURCE_DIR}/pyemd)
+#include_directories(${PROJECT_SOURCE_DIR}/pyemd/c_emd)
 
 set(CRAYON_DEST "${CMAKE_INSTALL_PREFIX}/crayon")
 SET(CMAKE_SKIP_BUILD_RPATH FALSE)
@@ -52,8 +61,8 @@ IF("${isSystemDir}" STREQUAL "-1")
 ENDIF("${isSystemDir}" STREQUAL "-1")
 
 # build pyemd library
-file(GLOB SRC_PYEMD "pyemd/c_emd/emd.c")
-add_library(pyemd SHARED ${SRC_PYEMD})
+#file(GLOB SRC_PYEMD "pyemd/c_emd/emd.c")
+#add_library(pyemd SHARED ${SRC_PYEMD})
 
 # build voro++ library
 file(GLOB SRC_VOROPP "voro++/voro++/voro++.cc")
@@ -68,13 +77,20 @@ file(GLOB SRC_GRAPHLET "libgraphlet/src/libgraphlet/*.cpp")
 file(GLOB SRC_GPU "libgraphlet/src/libgraphlet/*GPU.cpp")
 list(REMOVE_ITEM SRC_GRAPHLET ${SRC_GPU})
 add_library(graphlet SHARED ${SRC_GRAPHLET})
+target_link_libraries(graphlet
+                      orca)
+
+# build GPU components of crayon
+file(GLOB SRC_CRAYON_GPU "src/*.cu")
+cuda_add_library(crayonGPU SHARED ${SRC_CRAYON_GPU})
 
 # build crayon library
 file(GLOB SRC_CRAYON "src/*.cc")
 add_library(crayon SHARED ${SRC_CRAYON})
 target_link_libraries(crayon
+                      crayonGPU
 	              voropp
-                      pyemd
+#                      pyemd
                       orca
                       graphlet
 )
@@ -82,10 +98,11 @@ set_target_properties(crayon PROPERTIES PREFIX "_")
 set_target_properties(crayon PROPERTIES SUFFIX ".so")
 
 # install C++ libraries
-install(TARGETS pyemd DESTINATION "${CRAYON_DEST}/lib")
+#install(TARGETS pyemd DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS voropp DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS orca DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS graphlet DESTINATION "${CRAYON_DEST}/lib")
+install(TARGETS crayonGPU DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS crayon DESTINATION ${CRAYON_DEST})
 # install python module
 file(GLOB SRC_PY "src/py/*.py")
