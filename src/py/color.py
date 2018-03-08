@@ -36,7 +36,7 @@ def neighborSimilarity(f_map,neighbors,coords):
         f_dat[i,2] = np.mean(f_dat[nn,0])
     return f_dat
 
-def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='add'):
+def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='add',suffix=''):
     # create a VMD draw script
     fid = open(filename,'w')
     cmds = ['axes location off',
@@ -71,7 +71,7 @@ def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='ad
             print('mol addfile %s %s'%(xml_prefix,on_load),file=fid)
             newFrame = False
         cmds = ['[atomselect top "all"] set radius %f'%(0.50*sigma),
-                'set fid [open "%s'%xml_prefix + '_%d%d%d.cmap"]'%com,
+                'set fid [open "%s'%xml_prefix + '_%d%d%d'%com + '%s.cmap"]'%suffix,
                 'set file_data [read $fid]',
                 'close $fid',
                 'set sel [atomselect top "all"]',

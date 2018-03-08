@@ -6,7 +6,6 @@
 # This file is part of the crayon project, released under the Modified BSD License.
 
 from __future__ import print_function
-import sys
 
 import numpy as np
 
@@ -30,18 +29,27 @@ class NeighborList:
     def getNeighbors(self,snap):
         return []
     # builds an adjacency matrix from the nearest neighbor list
-    def particleAdjacency(i, NL):
+    def particleAdjacency(self,i, NL):
         idx = NL[i].flatten()
-        if self.second_shell:
+        if len(idx) <= 12:
             shell2 = []
             for j in range(len(idx)):
                 shell2 += list(NL[idx[j]])
-            idx = np.asarray(list(set(shell2)),dtype=np.int)
+            shell2 = np.unique(np.array(shell2,dtype=np.int))
+            if len(shell2) <= 24:
+                idx = np.array(shell2)
+        idx = np.sort(idx) # enforce deterministic ordering
         n = len(idx)
         A = np.zeros((n,n),np.int8)
         for j in range(len(idx)):
             for k in range(len(idx)):
                 A[j,k] = int( (idx[k] in NL[idx[j]].flatten()) or j == k )
+        # enforce symmetry
+        for j in range(len(idx)-1):
+            for k in range(j+1,len(idx)):
+                if A[j,k] == 1 or A[k,j] == 1:
+                    A[j,k] = 1
+                    A[k,j] = 1
         return A
     def getAdjacency(self,snap):
         adjacency = []
@@ -80,12 +88,9 @@ class Voronoi(NeighborList):
     # filter neighbors by hierarchical clustering
     def filterNeighbors(self,idx,neighbors,snap):
         # get neighbors from triangulation
-        nn = np.asarray(neighbors[idx],dtype=np.int)
-        # get displacement vectors
-        d_vec = snap.xyz[nn,:] - snap.xyz[idx,:]
-        # wrap them according to boundary conditions specified in Snapshot
-        pbc = np.asarray([dim in snap.pbc for dim in 'xyz'],dtype=np.float)
-        d_vec -= snap.L * np.round( d_vec / snap.L * pbc)
+        nn = np.array(neighbors[idx],dtype=np.int)
+        # get displacement vectors and ask Snapshot to wrap them
+        d_vec = snap.wrap(snap.xyz[nn,:] - snap.xyz[idx,:])
         # sort neighbors by increasing distance
         d_nbr = np.sqrt(np.sum((d_vec)**2.,1))
         order = np.argsort(d_nbr)
