@@ -8,6 +8,17 @@ Cancer informatics 6 (2008): 257.
 
 crayon is released under the Modified BSD License. Please read the [license](LICENSE.md) for exact terms.
 
+## Obtaining crayon
+
+Clone from the git repository and initialize the submodules. You must do this recursively to ensure all
+dependencies are obtained!
+
+```bash
+git clone https://github.com/wfreinhart/crayon.git
+cd crayon
+git submodule update --init --recursive
+```
+
 ## Compiling crayon
 
 To build crayon, ensure that the `hoomd` module is on your Python path

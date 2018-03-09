@@ -31,6 +31,7 @@ find_package(PythonLibsNew REQUIRED)
 find_package(Boost REQUIRED)
 
 include_directories(${PYTHON_INCLUDE_DIR})
+include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/pybind11/include)
 include_directories(${PROJECT_SOURCE_DIR}/eigen)
@@ -62,12 +63,14 @@ file(GLOB SRC_GRAPHLET "libgraphlet/src/libgraphlet/*.cpp")
 file(GLOB SRC_GPU "libgraphlet/src/libgraphlet/*GPU.cpp")
 list(REMOVE_ITEM SRC_GRAPHLET ${SRC_GPU})
 add_library(graphlet SHARED ${SRC_GRAPHLET})
+target_link_libraries(graphlet
+                      orca)
 
 # build crayon library
 file(GLOB SRC_CRAYON "src/*.cc")
 add_library(crayon SHARED ${SRC_CRAYON})
 target_link_libraries(crayon
-	              voropp
+                      voropp
                       orca
                       graphlet
 )
