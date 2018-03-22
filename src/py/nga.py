@@ -15,7 +15,6 @@ from crayon import io
 from crayon import dmap
 
 import numpy as np
-from emd import emd
 
 try:
     import pickle
@@ -45,14 +44,13 @@ class Graph:
         self.gdd = self.C.gdd()
         # compute its Graphlet Degree Vector
         self.gdv = self.C.gdv()
-        s = np.sum(self.gdv,1)
-        s[s==0] = 1.
-        self.ngdv = self.gdv / np.transpose( s * np.ones((self.gdv.shape[1],1)))
+        # convert node-wise to graph-wise graphlet frequencies
+        self.ngdv = np.sum(self.gdv,0) / float(np.sum(graph_gdv))
     def __sub__(self,other):
-        R""" difference between this and another Graph, defined as the Earth Mover's Distance
-        between Graphlet Degree Vectors
+        R""" difference between this and another Graph, just the norm
+        between graph-wide Graphlet Degree Vectors
         """
-        return emd(self.ngdv,other.ngdv)
+        return np.linalg.norm(self.ngdv-other.ngdv)
     def __eq__(self,other):
         R""" equality comparison between this and another Graph; checks if A - B == 0
         """
