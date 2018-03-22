@@ -67,7 +67,7 @@ add_library(graphlet SHARED ${SRC_GRAPHLET})
 file(GLOB SRC_CRAYON "src/*.cc")
 add_library(crayon SHARED ${SRC_CRAYON})
 target_link_libraries(crayon
-	              voropp
+                      voropp
                       orca
                       graphlet
 )
