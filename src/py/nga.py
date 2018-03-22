@@ -17,19 +17,13 @@ from crayon import dmap
 import numpy as np
 from scipy.cluster import hierarchy
 
+from emd import emd
+
 try:
     import pickle
     allow_binary = True
 except:
     allow_binary = False
-
-try:
-    import zlib
-    sig_compression = True
-except:
-    sig_compression = False
-
-sig_compression = False
 
 class Graph:
     R""" evaluates topology of neighborhood
