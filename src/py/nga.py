@@ -45,7 +45,7 @@ class Graph:
         # compute its Graphlet Degree Vector
         self.gdv = self.C.gdv()
         # convert node-wise to graph-wise graphlet frequencies
-        self.ngdv = np.sum(self.gdv,0) / float(np.sum(self.gdv))
+        self.ngdv = np.sum(self.gdv,0) / max(float(np.sum(self.gdv)),1.)
     def __sub__(self,other):
         R""" difference between this and another Graph, just the norm
         between graph-wide Graphlet Degree Vectors
