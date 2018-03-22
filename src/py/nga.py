@@ -64,6 +64,44 @@ class Graph:
         """
         return self.s
 
+class Pattern:
+    R""" evaluates sets of particle topologies encountered in a neighborhood
+
+    Args:
+        S (str): string containing the Graphlet Degree Vectors from all Graphs in the Pattern
+    """
+    def __init__(self,S):
+        self.s = S
+        ngdv = []
+        for s in S.split('/'):
+            s_gdv = s.split(':')[-1]
+            gdv = np.array(s_gdv.replace('[','').replace(']','').split(','),dtype=np.int)
+            ngdv.append( gdv / max(float(np.sum(gdv)),1.) )
+        self.ngdv = np.array(ngdv)
+    def __sub__(self,other):
+        R""" difference between this and another Pattern, using Earth Movers Distance
+        on the set of normalized GDVs
+        """
+        ni = len(self.ngdv)
+        nj = len(other.ngdv)
+        D = np.zeros((ni,nj))
+        for i, igdv in enumerate(self.ngdv):
+            for j, jgdv in enumerate(other.ngdv):
+                D[i,j] = np.linalg.norm(igdv-jgdv)
+        return emd(range(ni),range(nj),distance='precomputed',D=D)
+    def __eq__(self,other):
+        R""" equality comparison between this and another Pattern; checks if A - B == 0
+        """
+        return (self - other == 0.)
+    def __ne__(self,other):
+        R""" inequality comparison between this and another Patter; checks if A - B > 0
+        """
+        return (self - other > 0.)
+    def __str__(self):
+        R""" hashable representation of the Pattern, using the set of GDVs
+        """
+        return self.s
+
 class Library:
     R""" handles sets of generic signatures from snapshots and ensembles of snapshots
 
@@ -148,7 +186,8 @@ class PatternLibrary(Library):
         p_idx = np.zeros(len(neighbors),dtype=np.int)
         for i in range(len(neighbors)):
             participants = [int(x) for x in np.unique(graph_map[neighbors[i]])]
-            P = ' / '.join(['%s'%graph_sigs[x] for x in participants])
+            S = ' / '.join(['%s'%graph_sigs[x] for x in participants])
+            P = Pattern(S)
             p_idx[i] = self.encounter(P)
         print('Found %d unique patterns'%len(self.sigs))
         for i, sig in enumerate(self.sigs):
