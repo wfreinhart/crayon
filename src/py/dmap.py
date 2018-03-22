@@ -37,26 +37,13 @@ class DMap:
             valid_cols = np.arange(dists.shape[1])
         if landmarks is None:
             D = dists
-            print(D.shape)
             D = D[valid_rows,:]
-            print(D.shape)
             D = D[:,valid_cols]
-            print(D.shape)
-            print(valid_cols.shape)
-            print(valid_rows.shape)
         else:
-            print(dists.shape)
-            print(len(landmarks))
             D = dists[landmarks,:]
-            print(D.shape)
             D = D[:,valid_cols]
-            print(D.shape)
             L = dists[valid_rows,:]
-            print(L.shape)
             L = L[:,valid_cols]
-            print(L.shape)
-            print(valid_cols.shape)
-            print(valid_rows.shape)
         # compute landmark manifold
         self._cpp.set_dists(D)
         self._cpp.set_num_evec(self.num_evec)
@@ -80,9 +67,6 @@ class DMap:
         self.evecs_ny = evecs_ny
         # construct uniformly coordinates for mapping to RGB space
         self.transform()
-        print(self.evecs.shape)
-        print(self.evecs_ny.shape)
-        print(self.color_coords.shape)
     def write(self,prefix='',binary=False):
         if binary:
             buff = {'evals': self.evals,
