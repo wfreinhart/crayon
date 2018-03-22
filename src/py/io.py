@@ -27,14 +27,26 @@ def readXYZ(snap,reader_input):
     with open(filename,'r') as config:
         lines = config.readlines()
     N = int(lines[0])
-    L = np.asarray([float(x) for x in lines[1].replace('Lattice=','').replace('"','').split()[::4]])
+    if 'Lattice=' in lines[1]:
+        L = np.asarray([float(x) for x in lines[1].replace('Lattice=','').replace('"','').split()[::4]])
+    elif len(lines[1].split) == 3:
+        L = np.asarray([float(x) for x in lines[1].split()])
+    else:
+        raise RuntimeError('unexpected box format in file %s'%filename)
     R = np.zeros((N,3))
+    T_list = np.zeros(N,dtype=str)
     for i, l in enumerate(lines[2:]):
         R[i,:] = [float(x) for x in l.split()[1:]]
+        T_list[i] = l.split()[0]
+    types = list(np.unique(T_list))
+    T = np.zeros(N,dtype=np.int)
+    for i, t in enumerate(types):
+        T[T_list==t] = i
     # assign values to Snapshot
     snap.N = len(R)
     snap.xyz = R
     snap.L = L
+    snap.T = T
 
 def readXML(snap,reader_input):
     filename = reader_input
@@ -51,11 +63,24 @@ def readXML(snap,reader_input):
     txt = elem.text
     dat = np.fromstring(txt,sep=' ')
     R = np.reshape(dat,(-1,3))
+    N = len(R)
+    try:
+        elem = root.getiterator("type")[0]
+        txt = elem.text
+        dat = txt.replace(' ','').split('\n')
+        T_list = np.array([d for d in dat if len(d) > 0])
+        types = list(np.unique(T_list))
+        T = np.zeros(N,dtype=np.int)
+        for i, t in enumerate(types):
+            T[T_list==t] = i
+    except:
+        T = np.zeros(N)
     config.close()
     # assign values to Snapshot
-    snap.N = len(R)
+    snap.N = N
     snap.xyz = R
     snap.L = L
+    snap.T = T
 
 def readGSD(snap,reader_input):
     if not foundGSD:
@@ -68,10 +93,12 @@ def readGSD(snap,reader_input):
     # read values from file
     L = gsd_frame.configuration.box[:3]
     R = gsd_frame.particles.position[:,:3]
+    T = gsd_frame.particles.typeid
     # assign values to Snapshot
     snap.N = len(R)
     snap.xyz = R
     snap.L = L
+    snap.T = T
 
 def readListParallel(filename):
     p = parallel.ParallelTask()

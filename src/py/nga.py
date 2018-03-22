@@ -45,7 +45,7 @@ class Graph:
         # compute its Graphlet Degree Vector
         self.gdv = self.C.gdv()
         # convert node-wise to graph-wise graphlet frequencies
-        self.ngdv = np.sum(self.gdv,0) / float(np.sum(graph_gdv))
+        self.ngdv = np.sum(self.gdv,0) / float(np.sum(self.gdv))
     def __sub__(self,other):
         R""" difference between this and another Graph, just the norm
         between graph-wide Graphlet Degree Vectors
@@ -142,14 +142,17 @@ class GraphLibrary:
                 self.encounter(other.graphs[idx],count=(other.counts[idx] if counts else 0))
 
 class Snapshot:
-    R""" identifies neighborhoods from simulation snapshot
+    R""" holds necessary data from a simulation snapshot and handles
+         neighborlist generation and graph library construction
 
     Args:
-        xyz (array-like): N x 3 array of particle positions
-        L (array-like): box dimensions in x, y, z
-        pbc (str): dimensions with periodic boundaries (defaults to 'xyz')
+        reader_input (tuple): the input tuple for the reader function
+        reader (function): takes (Snapshot,reader_input) as input and
+                           sets Snapshot.N, Snapshot.L, and Snapshot.xyz
+        nl (crayon::Neighborlist): a neighborlist generation class
+        pbc (str) (optional): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,reader_input,reader=None,pbc='xyz',nl=None):
+    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz'):
         # initialize class member variables
         self.neighbors = None
         self.adjacency = None
@@ -182,6 +185,16 @@ class Snapshot:
         else:
             raise RuntimeError('must provide a NeighborList object')
         self.nl = nl
+        # auto-detect 2D configuration
+        span = np.max(self.xyz,axis=0) - np.min(self.xyz,axis=0)
+        dims = 'xyz'
+        for i, s in enumerate(span):
+            if s < 1e-4:
+                print('detected 2D configuration')
+                # force values for better compatibility with Voro++
+                self.L[i] = 1.
+                self.xyz[:,i] = 0.
+                self.pbc = self.pbc.replace(dims[i],'')
     def buildNeighborhoods(self):
         self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
