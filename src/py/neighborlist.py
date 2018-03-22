@@ -27,11 +27,11 @@ class NeighborList:
     def setParams(self):
         pass
     def getNeighbors(self,snap):
-        return []
+        return [], []
     # builds an adjacency matrix from the nearest neighbor list
     def particleAdjacency(self,i, NL):
         idx = NL[i].flatten()
-        if len(idx) <= 12:
+        if self.second_shell and len(idx) <= 12:
             shell2 = []
             for j in range(len(idx)):
                 shell2 += list(NL[idx[j]])
@@ -79,7 +79,7 @@ class AdaptiveCNA(NeighborList):
         neighbors = []
         for i in range(snap.N):
             neighbors.append(nl[i,Rsq[i,:]<Rcut[i]])
-        return neighbors
+        return neighbors, []
 
 class Voronoi(NeighborList):
     def setParams(self,r_max=None,
@@ -89,17 +89,18 @@ class Voronoi(NeighborList):
         self.cluster_method = cluster_method
         self.cluster_ratio = cluster_ratio
     # filter neighbors by hierarchical clustering
-    def filterNeighbors(self,idx,neighbors,snap):
+    def filterNeighbors(self,nl_idx,snap_idx,neighbors,snap):
         # get neighbors from triangulation
-        nn = np.array(neighbors[idx],dtype=np.int)
+        nn = np.array(neighbors[nl_idx],dtype=np.int)
         # remove negative IDs (Voro++ indicating that a particle is its own neighbor)
+        #    this line is problematic for type-specific operations
         nn[nn<0] = snap.N + nn[nn<0]
         # remove duplicates
         nn = np.unique(nn)
         # remove self
-        nn = nn[nn!=idx]
+        nn = nn[nn!=snap_idx]
         # get displacement vectors and ask Snapshot to wrap them
-        d_vec = snap.wrap(snap.xyz[nn,:] - snap.xyz[idx,:])
+        d_vec = snap.wrap(snap.xyz[nn,:] - snap.xyz[snap_idx,:])
         # sort neighbors by increasing distance
         d_nbr = np.sqrt(np.sum((d_vec)**2.,1))
         order = np.argsort(d_nbr)
@@ -110,24 +111,41 @@ class Voronoi(NeighborList):
             nn = nn[d_nbr <= self.r_max]
             d_nbr = d_nbr[d_nbr <= self.r_max]
             if len(nn) < 2:
-                nn = np.hstack(([idx],nn))
+                nn = np.hstack(([snap_idx],nn))
                 return nn
         # exclude far-away particles by clustering
         X = d_nbr.reshape(-1,1)
         Z = hierarchy.linkage(X,self.cluster_method)
         c = hierarchy.fcluster(Z,self.cluster_ratio*d_nbr[0],criterion='distance')
         h_base = np.argwhere(c == c[0]).flatten()
-        nn = np.hstack(([idx],nn[h_base]))
+        nn = np.hstack(([snap_idx],nn[h_base]))
         return nn
     # compute Delaunay triangulation with Voro++ library
     def getNeighbors(self,snap):
-        # build neighborlist with Voro++
-        nl = _crayon.voropp(snap.xyz, snap.L, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
-        neighbors = []
+        # build all-atom neighborlist with Voro++
+        nl = _crayon.voropp(snap.xyz, snap.L,
+                            'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
+        all_neighbors = []
         for idx in range(snap.N):
             if self.clustering:
-                nn = self.filterNeighbors(idx,nl,snap)
+                nn = self.filterNeighbors(idx,idx,nl,snap)
             else:
                 nn = nl[idx]
-            neighbors.append(np.array(nn,dtype=np.int))
-        return neighbors
+            all_neighbors.append(np.array(nn,dtype=np.int))
+        if len(np.unique(snap.T)) == 1:
+            return all_neighbors, all_neighbors
+        # use neighborhood to build multi-atom patterns
+        same_neighbors = [[] for idx in range(snap.N)]
+        for t in np.unique(snap.T):
+            t_idx = np.argwhere(snap.T==t).flatten()
+            nl = _crayon.voropp(snap.xyz[t_idx,:], snap.L,
+                                'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
+            for i in range(len(nl)):
+                nl[i] = np.unique(t_idx[np.array(nl[i])])
+            for i in range(len(t_idx)):
+                if self.clustering:
+                    nn = self.filterNeighbors(i,t_idx[i],nl,snap)
+                else:
+                    nn = nl[i]
+                same_neighbors[t_idx[i]] = nn
+        return same_neighbors, all_neighbors

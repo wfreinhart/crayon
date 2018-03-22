@@ -197,7 +197,7 @@ class Snapshot:
                 self.xyz[:,i] = 0.
                 self.pbc = self.pbc.replace(dims[i],'')
     def buildNeighborhoods(self):
-        self.neighbors = self.nl.getNeighbors(self)
+        self.neighbors, self.same_neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
         self.adjacency = self.nl.getAdjacency(self)
     def buildLibrary(self):
