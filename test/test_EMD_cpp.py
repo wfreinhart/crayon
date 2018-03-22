@@ -29,6 +29,10 @@ class ValidateEMD(unittest.TestCase):
     def setUp(self):
         pass
 
+    def testGPU(self):
+        _crayon.gpuAdd(10)
+        pass
+
     def testValidationEMD(self):
 
         n = len(gdvList)
@@ -37,12 +41,14 @@ class ValidateEMD(unittest.TestCase):
         py_emd = np.zeros((n,n))
         for i, P in enumerate(gdvList):
             for j, Q in enumerate(gdvList):
-                # if i == j:
-                    # continue
+                if i == j:
+                    continue
                 crayon_emd[i,j] = _crayon.emd(P,Q)
                 crayon_emd_gpu[i,j] = _crayon.emdGPU(P,Q)
                 py_emd[i,j] = emd(P,Q)
                 print(i,j,':',crayon_emd[i,j],crayon_emd_gpu[i,j],py_emd[i,j])
+                break
+            break
 
         np.testing.assert_array_almost_equal(crayon_emd,py_emd)
 

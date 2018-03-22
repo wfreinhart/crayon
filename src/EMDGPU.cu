@@ -39,7 +39,7 @@ __device__ struct basic_variable *init_basic(int row, int col, int ncols, double
     return var;
 }
 __device__ void insert_basic(struct basic_variable **basis, int size,
-                  struct basic_variable *node) {
+                             struct basic_variable *node) {
     struct adj_node *adj;
     int i;
     basis[size] = node;
@@ -460,7 +460,24 @@ double pyemd(int n_x, double *weight_x,
         }
     double *cost_gpu;
     cudaMalloc(&cost_gpu,n_x*n_y*sizeof(double));
-    cudaMemcpy(cost_gpu, cost_host, n_x*sizeof(double *), cudaMemcpyHostToDevice);
+    cudaMemcpy(cost_gpu, cost_host, n_x*n_y*sizeof(double), cudaMemcpyHostToDevice);
+    cudaDeviceSynchronize();
+    memset(cost_host,0,n_x*n_y*sizeof(double));
+    cudaMemcpy(cost_host, cost_gpu, n_x*n_y*sizeof(double), cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
+    std::cout << "cost matrix read back from gpu:" << std::endl;
+    for( int i = 0; i < n_x; i++ )
+        {
+        for( int j = 0; j < n_y; j++ )
+            {
+            int k = i * n_y + j;
+            std::cout << cost_host[k] << " ";
+            }
+        std::cout << std::endl;
+        }
+    // set default values for debugging
+    memset(d, -1.0, sizeof(double));
+    cudaMemset(d_gpu, -2.0, sizeof(double));
     // call emd kernel
     kernel::pyemd<<< 1, 1 >>>(n_x, weight_x_gpu,
         n_y, weight_y_gpu,
@@ -468,9 +485,9 @@ double pyemd(int n_x, double *weight_x,
         d_gpu
         );
     // wait for gpu to finish and copy back
-    // cudaDeviceSynchronize();
-    // cudaMemcpy(d, d_gpu, sizeof(double), cudaMemcpyDeviceToHost);
-    // cudaDeviceSynchronize();
+    cudaDeviceSynchronize();
+    cudaMemcpy(d, d_gpu, sizeof(double), cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
     return d[0];
 }
 } // end namespace gpu
