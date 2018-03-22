@@ -153,7 +153,7 @@ class Library:
         if type(others) != list:
             others = list([others])
         if type(others[0]) != type(self):
-            raise TypeError('Library.collect expects a list of Library objects')
+            raise TypeError('Library.collect expects a list of Library objects, but got %s != %s'%(str(type(others[0])),str(type(self))))
         # iterate over supplied library instances
         for other in others:
             for idx in range(len(other.items)):
@@ -206,12 +206,14 @@ class Snapshot:
         nl (crayon::Neighborlist): a neighborlist generation class
         pbc (str) (optional): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz'):
+    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz',
+                 allow_patterns=True):
         # initialize class member variables
         self.neighbors = None
         self.adjacency = None
         self.graph_library = None
         self.pattern_library = None
+        self.allow_patterns = allow_patterns
         # load from file
         if reader is None:
             filename = reader_input
@@ -250,7 +252,10 @@ class Snapshot:
                 self.xyz[:,i] = 0.
                 self.pbc = self.pbc.replace(dims[i],'')
     def buildNeighborhoods(self):
-        self.neighbors, self.all_neighbors = self.nl.getNeighbors(self)
+        if self.allow_patterns:
+            self.neighbors, self.all_neighbors = self.nl.getNeighbors(self)
+        else:
+            self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
         self.adjacency = self.nl.getAdjacency(self)
     def buildLibrary(self):
@@ -260,7 +265,7 @@ class Snapshot:
                 self.buildNeighborhoods()
             self.buildAdjacency()
         self.graph_library.build(self.adjacency)
-        if len(np.unique(self.T)) > 1:
+        if self.allow_patterns: # and len(np.unique(self.T)) > 1:
             self.pattern_library = PatternLibrary()
             self.map_graphs = self.mapTo(self.graph_library)
             self.pattern_library.build(self.all_neighbors,
@@ -308,7 +313,9 @@ class Snapshot:
             self.pattern_library = buff['pattern_library']
 
 class Ensemble:
-    def __init__(self):
+    def __init__(self,allow_patterns=True):
+        self.allow_patterns = allow_patterns
+        print(allow_patterns,self.allow_patterns)
         self.filenames = []
         self.graph_library = GraphLibrary()
         self.pattern_library = PatternLibrary()
@@ -332,26 +339,30 @@ class Ensemble:
             filename = self.filenames[f]
             print('rank %d of %d will process %s'%(self.rank,self.size,filename))
             # create snapshot instance and build neighborhoods
-            snap = Snapshot(filename,pbc='xyz',nl=nl)
+            snap = Snapshot(filename,pbc='xyz',nl=nl,allow_patterns=self.allow_patterns)
             self.insert(f,snap)
             snap.save(filename + '.nga',adjacency=True,neighbors=True)
-        print('rank %d tasks complete, found %d unique graphs and %d unique patterns'%(self.rank,len(self.graph_library.items),len(self.pattern_library.items)))
+        if self.allow_patterns:
+            print('rank %d tasks complete, found %d unique graphs and %d unique patterns'%(self.rank,len(self.graph_library.items),len(self.pattern_library.items)))
+        else:
+            print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.graph_library.items)))
         self.collect()
     def insert(self,idx,snap):
         if snap.graph_library is None:
             snap.buildLibrary()
         self.graph_library.collect(snap.graph_library)
         self.graph_lookups[idx] = snap.graph_library.lookup
-        self.pattern_library.collect(snap.pattern_library)
-        self.pattern_lookups[idx] = snap.pattern_library.lookup
+        if self.allow_patterns:
+            self.pattern_library.collect(snap.pattern_library)
+            self.pattern_lookups[idx] = snap.pattern_library.lookup
     def backmap(self,idx):
         N = 0
-        for sig, idx in lookups[idx].items():
+        for sig, idx in self.graph_lookups[idx].items():
             N += len(val)
         m = np.zeros(N,dtype=np.int) * np.nan
-        for sig, idx in lookups[idx].items():
-            if sig in library.index:
-                m[idx] = library.index[sig]
+        for sig, idx in self.graph_lookups[idx].items():
+            if sig in self.graph_library.index:
+                m[idx] = self.graph_library.index[sig]
         return np.array(m,dtype=np.int)
     def collect(self):
         others = self.p.gatherData(self)
@@ -370,14 +381,17 @@ class Ensemble:
                 if key in self.graph_lookups:
                     print('Warning: duplicate graph lookup key detected during Ensemble.collect')
                 self.graph_lookups[key] = val
-        # repeat with patterns
-        for other in others:
-            self.pattern_library.collect(other.pattern_library)
-            for key, val in other.pattern_lookups.items():
-                if key in self.pattern_lookups:
-                    print('Warning: duplicate pattern lookup key detected during Ensemble.collect')
-                self.pattern_lookups[key] = val
-        print('ensemble collection complete, found %d unique graphs and %d unique patterns'%(len(self.graph_library.items),len(self.pattern_library.items)))
+        if self.allow_patterns:
+            # repeat with patterns
+            for other in others:
+                self.pattern_library.collect(other.pattern_library)
+                for key, val in other.pattern_lookups.items():
+                    if key in self.pattern_lookups:
+                        print('Warning: duplicate pattern lookup key detected during Ensemble.collect')
+                    self.pattern_lookups[key] = val
+            print('ensemble collection complete, found %d unique graphs and %d unique patterns'%(len(self.graph_library.items),len(self.pattern_library.items)))
+        else:
+            print('ensemble collection complete, found %d unique graphs'%len(self.graph_library.items))
     def prune(self,min_freq=None):
         if not self.master:
             return
@@ -392,28 +406,28 @@ class Ensemble:
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
     def getColorMaps(self,cidx):
         c, c_map = color.compressColors(self.dmap.color_coords[:,cidx],delta=0.001)
-        frames = self.lookups.keys()
+        frames = self.graph_lookups.keys()
         frames.sort()
         frame_maps = []
         for f in frames:
-            N = np.sum(np.asarray([len(val) for key, val in self.lookups[f].items()]))
+            N = np.sum(np.asarray([len(val) for key, val in self.graph_lookups[f].items()]))
             frame_data = np.zeros(N,dtype=np.int)
-            for key, val in self.lookups[f].items():
+            for key, val in self.graph_lookups[f].items():
                 frame_data[np.asarray(val,dtype=np.int)] = self.graph_library.index[key]
             frame_maps.append(frame_data)
         return c, c_map, frame_maps
-    def computeDists(self,detect_outliers=True):
+    def computeDists(self,library,detect_outliers=True):
         # use a master-slave paradigm for load balancing
         task_list = []
         if self.master:
-            n = len(self.graph_library.sigs)
+            n = len(library.sigs)
             m = len(self.lm_sigs)
             self.dists = np.zeros( (n,m) ) + np.Inf # designate null values with Inf
             for i in range(n):
                 for j in range(m):
                     task_list.append( (i,self.lm_idx[j]) )
         # perform graph matching in parallel using MPI
-        graphs = self.p.shareData(self.graph_library.items)
+        items = self.p.shareData(library.items)
         eval_func = lambda task, data: data[task[0]] - data[task[1]]
         result_list = self.p.computeQueue(function=eval_func,
                                           tasks=task_list,
@@ -439,7 +453,7 @@ class Ensemble:
                 bad_col = np.argwhere(c != c_best).flatten()
                 self.lm_idx = self.lm_idx[good_col]
                 self.valid_cols = good_col
-                # then find other bad graphs
+                # then find other bad items
                 d = np.sum(self.dists,axis=1)
                 X = d.reshape(-1,1)
                 Z = hierarchy.linkage(X,'centroid')
