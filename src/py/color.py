@@ -15,9 +15,15 @@ def compressColors(colors,delta=0.001):
     while len(c) > 1024:
         delta = delta * 2
         c = np.vstack({tuple(row) for row in np.floor(colors/delta)*delta})
+    # make NaN colors black
+    nan_idx = np.argwhere(c[:,0] != c[:,0]).flatten()
+    c[nan_idx,:] = 0.
     # map the individual colors into the compressed color space
     cmap = np.zeros(len(colors))
     for i, row in enumerate(colors):
+        if np.any(row != row):
+            cmap[i] = -1
+            continue
         colors_round = np.ones((c.shape[0],1)) * np.floor(row/delta)*delta
         color_delta = np.sum( (colors_round - c )**2., 1)
         cmap[i] = np.argwhere(color_delta == 0).flatten()[0]

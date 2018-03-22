@@ -15,6 +15,7 @@ from crayon import io
 from crayon import dmap
 
 import numpy as np
+from scipy.cluster import hierarchy
 
 try:
     import pickle
@@ -251,6 +252,8 @@ class Ensemble:
         self.sigs = []
         self.graphs = []
         self.dists = None
+        self.valid_cols = None
+        self.valid_rows = None
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
     def neighborhoodsFromFile(self,filenames,nl):
@@ -323,7 +326,7 @@ class Ensemble:
                 frame_data[np.asarray(val,dtype=np.int)] = self.library.index[key]
             frame_maps.append(frame_data)
         return c, c_map, frame_maps
-    def computeDists(self):
+    def computeDists(self,detect_outliers=True):
         # use a master-slave paradigm for load balancing
         task_list = []
         if self.master:
@@ -346,7 +349,28 @@ class Ensemble:
                 jid = np.argwhere(self.lm_idx == j)[0]
                 d = result_list[k]
                 self.dists[i,jid] = d
-            self.dists = self.dists / np.max(self.dists)
+            # detect outliers, if requested
+            if detect_outliers:
+                # filter outliers such as vapor particles
+                # first find bad landmarks
+                d = np.sum(self.dists,axis=0)
+                X = d.reshape(-1,1)
+                Z = hierarchy.linkage(X,'centroid')
+                c = hierarchy.fcluster(Z,np.median(d),criterion='distance')
+                c_med = [np.median(d[c==i]) for i in np.unique(c)]
+                c_best = int(np.unique(c)[np.argwhere(c_med == np.min(c_med))])
+                good_col = np.argwhere(c == c_best).flatten()
+                bad_col = np.argwhere(c != c_best).flatten()
+                self.lm_idx = self.lm_idx[good_col]
+                self.valid_cols = good_col
+                # then find other bad graphs
+                d = np.sum(self.dists,axis=1)
+                X = d.reshape(-1,1)
+                Z = hierarchy.linkage(X,'centroid')
+                c = hierarchy.fcluster(Z,np.median(d),criterion='distance')
+                c_med = [np.median(d[c==i]) for i in np.unique(c)]
+                c_best = int(np.unique(c)[np.argwhere(c_med == np.min(c_med))])
+                self.valid_rows = np.argwhere(c == c_best).flatten()
     def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
         coms = None
         if self.master:
@@ -354,7 +378,8 @@ class Ensemble:
             print('probable best eigenvector triplet is %s'%str(coms[best]))
         coms = self.p.shareData(coms)
         self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito,similarity=similarity)
-    def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
+    def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,
+                      VMD=False,Ovito=False,similarity=True):
         # share data among workers
         colors = []
         color_maps = []
@@ -396,6 +421,8 @@ class Ensemble:
         if self.master:
             self.dmap = dmap.DMap()
             self.dmap.set_params()
-            self.dmap.build(self.dists,landmarks=self.lm_idx)
+            self.dmap.build(self.dists,landmarks=self.lm_idx,
+                            valid_cols=self.valid_cols,
+                            valid_rows=self.valid_rows)
             print('Diffusion map construction complete')
             self.dmap.write()

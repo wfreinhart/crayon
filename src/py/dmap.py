@@ -28,16 +28,40 @@ class DMap:
     def set_params(self,num_evec=10,epsilon=None):
         self.num_evec = num_evec
         self.epsilon = epsilon
-    def build(self,L,landmarks=None):
+    def build(self,dists,landmarks=None,
+              valid_cols=None,
+              valid_rows=None):
+        if valid_rows is None:
+            valid_rows = np.arange(dists.shape[0])
+        if valid_cols is None:
+            valid_cols = np.arange(dists.shape[1])
         if landmarks is None:
-            D = L
+            D = dists
+            print(D.shape)
+            D = D[valid_rows,:]
+            print(D.shape)
+            D = D[:,valid_cols]
+            print(D.shape)
+            print(valid_cols.shape)
+            print(valid_rows.shape)
         else:
-            D = L[landmarks,:]
+            print(dists.shape)
+            print(len(landmarks))
+            D = dists[landmarks,:]
+            print(D.shape)
+            D = D[:,valid_cols]
+            print(D.shape)
+            L = dists[valid_rows,:]
+            print(L.shape)
+            L = L[:,valid_cols]
+            print(L.shape)
+            print(valid_cols.shape)
+            print(valid_rows.shape)
         # compute landmark manifold
         self._cpp.set_dists(D)
         self._cpp.set_num_evec(self.num_evec)
         if self.epsilon is None:
-            self.epsilon = np.median(L)
+            self.epsilon = np.median(dists)
         self._cpp.set_epsilon(self.epsilon)
         self._cpp.compute()
         self.evals = np.asarray(self._cpp.get_eval())
@@ -47,7 +71,18 @@ class DMap:
             self.evecs_ny = None
         else:
             self.evecs_ny = np.asarray(PyDMap.nystrom(self._cpp,L))
+        # backfill for invalid graphs
+        evecs = np.zeros((dists.shape[1],self.num_evec))*np.nan
+        evecs[valid_cols,:] = np.array(self.evecs)
+        self.evecs = evecs
+        evecs_ny = np.zeros((dists.shape[0],self.num_evec))*np.nan
+        evecs_ny[valid_rows,:] = np.array(self.evecs_ny)
+        self.evecs_ny = evecs_ny
+        # construct uniformly coordinates for mapping to RGB space
         self.transform()
+        print(self.evecs.shape)
+        print(self.evecs_ny.shape)
+        print(self.color_coords.shape)
     def write(self,prefix='',binary=False):
         if binary:
             buff = {'evals': self.evals,
@@ -69,16 +104,19 @@ class DMap:
             R = self.evecs
         else:
             R = self.evecs_ny
-        self.color_coords = np.zeros(R.shape)
+        self.color_coords = np.zeros(R.shape)*np.nan
         # first eigenvector is always trivial
         self.color_coords[:,0] = 0.5
         # transform each remaining eigenvector to yield a uniform distribution
         for i in range(1,R.shape[1]):
             r = R[:,i]
-            x = np.linspace(np.min(r),np.max(r),np.round(np.sqrt(len(r))))
-            hy, hx = np.histogram(r, bins=x, normed=True)
+            x = np.linspace(np.nanmin(r),np.nanmax(r),
+                            np.round(np.sqrt(len(r[r==r]))))
+            hy, hx = np.histogram(r[r==r], bins=x, normed=True)
             c = np.cumsum(hy) / np.sum(hy)
             self.color_coords[:,i] = np.interp(r,0.5*(x[:-1]+x[1:]),c)
+        nan_idx = np.argwhere(np.isnan(self.color_coords[:,-1])).flatten()
+        self.color_coords[nan_idx,:] = 0.
     def uncorrelatedTriplets(self):
         # first determine least correlated eigenvectors
         X = np.abs( np.corrcoef(np.transpose(self.color_coords[:,1:])) )
