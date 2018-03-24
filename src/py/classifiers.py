@@ -13,8 +13,34 @@ import numpy as np
 
 from emd import emd
 
-class Graph:
-    R""" evaluates topology of neighborhood
+class Classifier:
+    R""" abstract class defining a neighborhood topology
+
+    Args:
+        (none)
+    """
+    def __init__(self):
+        self.s = None
+    def __sub__(self,other):
+        return None
+    def __eq__(self,other):
+        R""" equality comparison between this and another Classifier,
+             simply checks if A - B == 0
+        """
+        return (self - other == 0.)
+    def __ne__(self,other):
+        R""" inequality comparison between this and another Classifier,
+             simply checks if A - B > 0
+        """
+        return (self - other > 0.)
+    def __str__(self):
+        R""" hashable representation of the Classifier, as specified
+             by the constructor
+        """
+        return self.s
+
+class Graph(Classifier):
+    R""" evaluates topology of neighborhood as presented in a single graph
 
     Args:
         A (array-like): adjacency matrix defining the neighborhood graph
@@ -39,18 +65,6 @@ class Graph:
         between graph-wide Graphlet Degree Vectors
         """
         return np.linalg.norm(self.ngdv-other.ngdv)
-    def __eq__(self,other):
-        R""" equality comparison between this and another Graph; checks if A - B == 0
-        """
-        return (self - other == 0.)
-    def __ne__(self,other):
-        R""" inequality comparison between this and another Graph; checks if A - B > 0
-        """
-        return (self - other > 0.)
-    def __str__(self):
-        R""" hashable representation of the Graph, using the Graphlet Degree Vector
-        """
-        return self.s
 
 class Pattern:
     R""" evaluates sets of particle topologies encountered in a neighborhood
@@ -77,18 +91,6 @@ class Pattern:
             for j, jgdv in enumerate(other.ngdv):
                 D[i,j] = np.linalg.norm(igdv-jgdv)
         return emd(range(ni),range(nj),distance='precomputed',D=D)
-    def __eq__(self,other):
-        R""" equality comparison between this and another Pattern; checks if A - B == 0
-        """
-        return (self - other == 0.)
-    def __ne__(self,other):
-        R""" inequality comparison between this and another Patter; checks if A - B > 0
-        """
-        return (self - other > 0.)
-    def __str__(self):
-        R""" hashable representation of the Pattern, using the set of GDVs
-        """
-        return self.s
 
 class Library:
     R""" handles sets of generic signatures from snapshots and ensembles of snapshots
