@@ -66,7 +66,7 @@ class Graph(Classifier):
         """
         return np.linalg.norm(self.ngdv-other.ngdv)
 
-class Pattern:
+class Pattern(Classifier):
     R""" evaluates sets of particle topologies encountered in a neighborhood
 
     Args:
