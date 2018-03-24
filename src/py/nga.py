@@ -95,7 +95,7 @@ class Snapshot:
             self.buildAdjacency()
         self.graph_library.build(self.adjacency)
         if self.allow_patterns: # and len(np.unique(self.T)) > 1:
-            self.pattern_library = PatternLibrary()
+            self.pattern_library = classifiers.PatternLibrary()
             self.map_graphs = self.mapTo(self.graph_library)
             self.pattern_library.build(self.all_neighbors,
                                        self.graph_library.sigs,
