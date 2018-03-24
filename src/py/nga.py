@@ -35,14 +35,13 @@ class Snapshot:
         nl (crayon::Neighborlist): a neighborlist generation class
         pbc (str) (optional): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz',
-                 allow_patterns=True):
+    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz',patterns=False):
         # initialize class member variables
         self.neighbors = None
         self.adjacency = None
         self.graph_library = None
+        self.patterns = patterns
         self.pattern_library = None
-        self.allow_patterns = allow_patterns
         # load from file
         if reader is None:
             filename = reader_input
@@ -81,7 +80,7 @@ class Snapshot:
                 self.xyz[:,i] = 0.
                 self.pbc = self.pbc.replace(dims[i],'')
     def buildNeighborhoods(self):
-        if self.allow_patterns:
+        if self.patterns:
             self.neighbors, self.all_neighbors = self.nl.getNeighbors(self)
         else:
             self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
@@ -94,7 +93,7 @@ class Snapshot:
                 self.buildNeighborhoods()
             self.buildAdjacency()
         self.graph_library.build(self.adjacency)
-        if self.allow_patterns: # and len(np.unique(self.T)) > 1:
+        if self.patterns:
             self.pattern_library = classifiers.PatternLibrary()
             self.map_graphs = self.mapTo(self.graph_library)
             self.pattern_library.build(self.all_neighbors,
@@ -142,21 +141,19 @@ class Snapshot:
             self.pattern_library = buff['pattern_library']
 
 class Ensemble:
-    def __init__(self,allow_patterns=True):
-        self.allow_patterns = allow_patterns
-        print(allow_patterns,self.allow_patterns)
+    def __init__(self,patterns=False):
         self.filenames = []
         self.graph_library = classifiers.GraphLibrary()
-        self.pattern_library = classifiers.PatternLibrary()
-        self.dmap = None
         self.graph_lookups = {}
-        self.pattern_lookups = {}
-        self.sigs = []
         self.graphs = []
+        self.patterns = patterns
+        self.pattern_library = classifiers.PatternLibrary()
+        self.pattern_lookups = {}
         self.patterns = []
         self.dists = None
         self.valid_cols = None
         self.valid_rows = None
+        self.dmap = None
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
     def neighborhoodsFromFile(self,filenames,nl):
@@ -168,10 +165,10 @@ class Ensemble:
             filename = self.filenames[f]
             print('rank %d of %d will process %s'%(self.rank,self.size,filename))
             # create snapshot instance and build neighborhoods
-            snap = Snapshot(filename,pbc='xyz',nl=nl,allow_patterns=self.allow_patterns)
+            snap = Snapshot(filename,pbc='xyz',nl=nl,patterns=self.patterns)
             self.insert(f,snap)
             snap.save(filename + '.nga',adjacency=True,neighbors=True)
-        if self.allow_patterns:
+        if self.patterns:
             print('rank %d tasks complete, found %d unique graphs and %d unique patterns'%(self.rank,len(self.graph_library.items),len(self.pattern_library.items)))
         else:
             print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.graph_library.items)))
@@ -181,7 +178,7 @@ class Ensemble:
             snap.buildLibrary()
         self.graph_library.collect(snap.graph_library)
         self.graph_lookups[idx] = snap.graph_library.lookup
-        if self.allow_patterns:
+        if self.patterns:
             self.pattern_library.collect(snap.pattern_library)
             self.pattern_lookups[idx] = snap.pattern_library.lookup
     def backmap(self,idx):
@@ -210,7 +207,7 @@ class Ensemble:
                 if key in self.graph_lookups:
                     print('Warning: duplicate graph lookup key detected during Ensemble.collect')
                 self.graph_lookups[key] = val
-        if self.allow_patterns:
+        if self.patterns:
             # repeat with patterns
             for other in others:
                 self.pattern_library.collect(other.pattern_library)
@@ -221,29 +218,30 @@ class Ensemble:
             print('ensemble collection complete, found %d unique graphs and %d unique patterns'%(len(self.graph_library.items),len(self.pattern_library.items)))
         else:
             print('ensemble collection complete, found %d unique graphs'%len(self.graph_library.items))
-    def prune(self,library,min_freq=None):
+    def prune(self,min_freq=None):
         if not self.master:
             return
         try:
             min_freq = int(min_freq)
         except:
             raise RuntimeError('Must specify min_freq, and it must be castable to int')
+        if self.patterns:
+            library = self.pattern_library
+        else:
+            library = self.graph_library
         n = len(library.sigs)
         self.lm_idx = np.argwhere(library.counts >= min_freq).flatten()
         m = len(self.lm_idx)
         self.lm_sigs = [library.sigs[idx] for idx in self.lm_idx]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
-    def getColorMaps(self,classifier_name,cidx):
+    def getColorMaps(self,cidx):
         c, c_map = color.compressColors(self.dmap.color_coords[:,cidx],delta=0.001)
-
-        if classifier_name.lower() == 'graph':
-            lookups = self.graph_lookups
-            library = self.graph_library
-        elif classifier_name.lower() == 'pattern':
+        if self.patterns:
             lookups = self.pattern_lookups
             library = self.pattern_library
         else:
-            raise ValueError('must request either Graph or Pattern')
+            lookups = self.graph_lookups
+            library = self.graph_library
         frames = lookups.keys()
         frames.sort()
         frame_maps = []
@@ -254,10 +252,14 @@ class Ensemble:
                 frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
             frame_maps.append(frame_data)
         return c, c_map, frame_maps
-    def computeDists(self,library,detect_outliers=True):
+    def computeDists(self,detect_outliers=True):
         # use a master-slave paradigm for load balancing
         task_list = []
         if self.master:
+            if self.patterns:
+                library = self.pattern_library
+            else:
+                library = self.graph_library
             n = len(library.sigs)
             m = len(self.lm_sigs)
             self.dists = np.zeros( (n,m) ) + np.Inf # designate null values with Inf
