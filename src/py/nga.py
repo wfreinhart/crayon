@@ -221,17 +221,17 @@ class Ensemble:
             print('ensemble collection complete, found %d unique graphs and %d unique patterns'%(len(self.graph_library.items),len(self.pattern_library.items)))
         else:
             print('ensemble collection complete, found %d unique graphs'%len(self.graph_library.items))
-    def prune(self,min_freq=None):
+    def prune(self,library,min_freq=None):
         if not self.master:
             return
         try:
             min_freq = int(min_freq)
         except:
             raise RuntimeError('Must specify min_freq, and it must be castable to int')
-        n = len(self.graph_library.sigs)
-        self.lm_idx = np.argwhere(self.graph_library.counts >= min_freq).flatten()
+        n = len(library.sigs)
+        self.lm_idx = np.argwhere(library.counts >= min_freq).flatten()
         m = len(self.lm_idx)
-        self.lm_sigs = [self.graph_library.sigs[idx] for idx in self.lm_idx]
+        self.lm_sigs = [library.sigs[idx] for idx in self.lm_idx]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
     def getColorMaps(self,cidx):
         c, c_map = color.compressColors(self.dmap.color_coords[:,cidx],delta=0.001)
