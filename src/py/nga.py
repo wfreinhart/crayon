@@ -233,16 +233,25 @@ class Ensemble:
         m = len(self.lm_idx)
         self.lm_sigs = [library.sigs[idx] for idx in self.lm_idx]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
-    def getColorMaps(self,cidx):
+    def getColorMaps(self,classifier_name,cidx):
         c, c_map = color.compressColors(self.dmap.color_coords[:,cidx],delta=0.001)
-        frames = self.graph_lookups.keys()
+
+        if classifier_name.lower() == 'graph':
+            lookups = self.graph_lookups
+            library = self.graph_library
+        elif classifier_name.lower() == 'pattern':
+            lookups = self.pattern_lookups
+            library = self.pattern_library
+        else:
+            raise ValueError('must request either Graph or Pattern')
+        frames = lookups.keys()
         frames.sort()
         frame_maps = []
         for f in frames:
-            N = np.sum(np.asarray([len(val) for key, val in self.graph_lookups[f].items()]))
+            N = np.sum(np.asarray([len(val) for key, val in lookups[f].items()]))
             frame_data = np.zeros(N,dtype=np.int)
-            for key, val in self.graph_lookups[f].items():
-                frame_data[np.asarray(val,dtype=np.int)] = self.graph_library.index[key]
+            for key, val in lookups[f].items():
+                frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
             frame_maps.append(frame_data)
         return c, c_map, frame_maps
     def computeDists(self,library,detect_outliers=True):
@@ -307,7 +316,7 @@ class Ensemble:
         if self.master:
             color_coords = self.dmap.color_coords
             for trip in trips:
-                c, cm, fm = self.getColorMaps(np.array(trip))
+                c, cm, fm = self.getColorMaps('pattern',np.array(trip))
                 colors.append(c)
                 color_maps.append(cm)
                 frame_maps.append(fm)
