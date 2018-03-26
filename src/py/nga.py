@@ -35,12 +35,12 @@ class Snapshot:
         nl (crayon::Neighborlist): a neighborlist generation class
         pbc (str) (optional): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz',patterns=False):
+    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz',pattern_mode=False):
         # initialize class member variables
         self.neighbors = None
         self.adjacency = None
         self.graph_library = None
-        self.patterns = patterns
+        self.pattern_mode = pattern_mode
         self.pattern_library = None
         # load from file
         if reader is None:
@@ -80,7 +80,7 @@ class Snapshot:
                 self.xyz[:,i] = 0.
                 self.pbc = self.pbc.replace(dims[i],'')
     def buildNeighborhoods(self):
-        if self.patterns:
+        if self.pattern_mode:
             self.neighbors, self.all_neighbors = self.nl.getNeighbors(self)
         else:
             self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
@@ -93,7 +93,7 @@ class Snapshot:
                 self.buildNeighborhoods()
             self.buildAdjacency()
         self.graph_library.build(self.adjacency)
-        if self.patterns:
+        if self.pattern_mode:
             self.pattern_library = classifiers.PatternLibrary()
             self.map_graphs = self.mapTo(self.graph_library)
             self.pattern_library.build(self.all_neighbors,
@@ -141,12 +141,12 @@ class Snapshot:
             self.pattern_library = buff['pattern_library']
 
 class Ensemble:
-    def __init__(self,patterns=False):
+    def __init__(self,pattern_mode=False):
         self.filenames = []
         self.graph_library = classifiers.GraphLibrary()
         self.graph_lookups = {}
         self.graphs = []
-        self.patterns = patterns
+        self.pattern_mode = pattern_mode
         self.pattern_library = classifiers.PatternLibrary()
         self.pattern_lookups = {}
         self.patterns = []
@@ -165,10 +165,10 @@ class Ensemble:
             filename = self.filenames[f]
             print('rank %d of %d will process %s'%(self.rank,self.size,filename))
             # create snapshot instance and build neighborhoods
-            snap = Snapshot(filename,pbc='xyz',nl=nl,patterns=self.patterns)
+            snap = Snapshot(filename,pbc='xyz',nl=nl,pattern_mode=self.pattern_mode)
             self.insert(f,snap)
             snap.save(filename + '.nga',adjacency=True,neighbors=True)
-        if self.patterns:
+        if self.pattern_mode:
             print('rank %d tasks complete, found %d unique graphs and %d unique patterns'%(self.rank,len(self.graph_library.items),len(self.pattern_library.items)))
         else:
             print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.graph_library.items)))
@@ -178,7 +178,7 @@ class Ensemble:
             snap.buildLibrary()
         self.graph_library.collect(snap.graph_library)
         self.graph_lookups[idx] = snap.graph_library.lookup
-        if self.patterns:
+        if self.pattern_mode:
             self.pattern_library.collect(snap.pattern_library)
             self.pattern_lookups[idx] = snap.pattern_library.lookup
     def backmap(self,idx):
@@ -207,7 +207,9 @@ class Ensemble:
                 if key in self.graph_lookups:
                     print('Warning: duplicate graph lookup key detected during Ensemble.collect')
                 self.graph_lookups[key] = val
-        if self.patterns:
+        print('ensemble graph collection complete, found %d unique graphs'%len(self.graph_library.items))
+        if self.pattern_mode:
+            print('collecting patterns')
             # repeat with patterns
             for other in others:
                 self.pattern_library.collect(other.pattern_library)
@@ -215,9 +217,7 @@ class Ensemble:
                     if key in self.pattern_lookups:
                         print('Warning: duplicate pattern lookup key detected during Ensemble.collect')
                     self.pattern_lookups[key] = val
-            print('ensemble collection complete, found %d unique graphs and %d unique patterns'%(len(self.graph_library.items),len(self.pattern_library.items)))
-        else:
-            print('ensemble collection complete, found %d unique graphs'%len(self.graph_library.items))
+            print('ensemble pattern collection complete, found %d unique patterns'%len(self.pattern_library.items))
     def prune(self,min_freq=None):
         if not self.master:
             return
@@ -225,7 +225,7 @@ class Ensemble:
             min_freq = int(min_freq)
         except:
             raise RuntimeError('Must specify min_freq, and it must be castable to int')
-        if self.patterns:
+        if self.pattern_mode:
             library = self.pattern_library
         else:
             library = self.graph_library
@@ -236,7 +236,7 @@ class Ensemble:
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
     def getColorMaps(self,cidx):
         c, c_map = color.compressColors(self.dmap.color_coords[:,cidx],delta=0.001)
-        if self.patterns:
+        if self.pattern_mode:
             lookups = self.pattern_lookups
             library = self.pattern_library
         else:
@@ -255,11 +255,11 @@ class Ensemble:
     def computeDists(self,detect_outliers=True):
         # use a master-slave paradigm for load balancing
         task_list = []
+        if self.pattern_mode:
+            library = self.pattern_library
+        else:
+            library = self.graph_library
         if self.master:
-            if self.patterns:
-                library = self.pattern_library
-            else:
-                library = self.graph_library
             n = len(library.sigs)
             m = len(self.lm_sigs)
             self.dists = np.zeros( (n,m) ) + np.Inf # designate null values with Inf
@@ -318,7 +318,7 @@ class Ensemble:
         if self.master:
             color_coords = self.dmap.color_coords
             for trip in trips:
-                c, cm, fm = self.getColorMaps('pattern',np.array(trip))
+                c, cm, fm = self.getColorMaps(np.array(trip))
                 colors.append(c)
                 color_maps.append(cm)
                 frame_maps.append(fm)
