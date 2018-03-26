@@ -92,7 +92,7 @@ def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='ad
         for cmd in cmds:
             print(cmd,file=fid)
         if newFrame:
-            cmds = ['mol rename top %s'%frame_run.split('/')[-2],
+            cmds = ['mol rename top %s'%frame_run.split('/')[-1],
                     'mol modstyle 0 top vdw 1.0 25',
                     'mol modmaterial 0 top "AOChalky"',
                     'mol modselect 0 top "all"',
@@ -106,7 +106,8 @@ def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='ad
                     'mol modcolor 1 top user',
                     'mol scaleminmax top 1 0 1023',
                     'mol selupdate 1 top 1',
-                    'mol colupdate 1 top 1']
+                    'mol colupdate 1 top 1',
+                    'mol off top']
             for cmd in cmds:
                 print(cmd,file=fid)
         prev = frame_run
