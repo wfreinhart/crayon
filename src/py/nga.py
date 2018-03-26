@@ -15,7 +15,7 @@ from crayon import io
 from crayon import dmap
 
 import numpy as np
-from emd import emd
+from scipy.cluster import hierarchy
 
 try:
     import pickle
@@ -45,14 +45,13 @@ class Graph:
         self.gdd = self.C.gdd()
         # compute its Graphlet Degree Vector
         self.gdv = self.C.gdv()
-        s = np.sum(self.gdv,1)
-        s[s==0] = 1.
-        self.ngdv = self.gdv / np.transpose( s * np.ones((self.gdv.shape[1],1)))
+        # convert node-wise to graph-wise graphlet frequencies
+        self.ngdv = np.sum(self.gdv,0) / max(float(np.sum(self.gdv)),1.)
     def __sub__(self,other):
-        R""" difference between this and another Graph, defined as the Earth Mover's Distance
-        between Graphlet Degree Vectors
+        R""" difference between this and another Graph, just the norm
+        between graph-wide Graphlet Degree Vectors
         """
-        return emd(self.ngdv,other.ngdv)
+        return np.linalg.norm(self.ngdv-other.ngdv)
     def __eq__(self,other):
         R""" equality comparison between this and another Graph; checks if A - B == 0
         """
@@ -144,14 +143,17 @@ class GraphLibrary:
                 self.encounter(other.graphs[idx],count=(other.counts[idx] if counts else 0))
 
 class Snapshot:
-    R""" identifies neighborhoods from simulation snapshot
+    R""" holds necessary data from a simulation snapshot and handles
+         neighborlist generation and graph library construction
 
     Args:
-        xyz (array-like): N x 3 array of particle positions
-        L (array-like): box dimensions in x, y, z
-        pbc (str): dimensions with periodic boundaries (defaults to 'xyz')
+        reader_input (tuple): the input tuple for the reader function
+        reader (function): takes (Snapshot,reader_input) as input and
+                           sets Snapshot.N, Snapshot.L, and Snapshot.xyz
+        nl (crayon::Neighborlist): a neighborlist generation class
+        pbc (str) (optional): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,reader_input,reader=None,pbc='xyz',nl=None):
+    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz'):
         # initialize class member variables
         self.neighbors = None
         self.adjacency = None
@@ -184,6 +186,16 @@ class Snapshot:
         else:
             raise RuntimeError('must provide a NeighborList object')
         self.nl = nl
+        # auto-detect 2D configuration
+        span = np.max(self.xyz,axis=0) - np.min(self.xyz,axis=0)
+        dims = 'xyz'
+        for i, s in enumerate(span):
+            if s < 1e-4:
+                print('detected 2D configuration')
+                # force values for better compatibility with Voro++
+                self.L[i] = 1.
+                self.xyz[:,i] = 0.
+                self.pbc = self.pbc.replace(dims[i],'')
     def buildNeighborhoods(self):
         self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
@@ -240,6 +252,8 @@ class Ensemble:
         self.sigs = []
         self.graphs = []
         self.dists = None
+        self.valid_cols = None
+        self.valid_rows = None
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
     def neighborhoodsFromFile(self,filenames,nl):
@@ -312,7 +326,7 @@ class Ensemble:
                 frame_data[np.asarray(val,dtype=np.int)] = self.library.index[key]
             frame_maps.append(frame_data)
         return c, c_map, frame_maps
-    def computeDists(self):
+    def computeDists(self,detect_outliers=True):
         # use a master-slave paradigm for load balancing
         task_list = []
         if self.master:
@@ -335,7 +349,28 @@ class Ensemble:
                 jid = np.argwhere(self.lm_idx == j)[0]
                 d = result_list[k]
                 self.dists[i,jid] = d
-            self.dists = self.dists / np.max(self.dists)
+            # detect outliers, if requested
+            if detect_outliers:
+                # filter outliers such as vapor particles
+                # first find bad landmarks
+                d = np.sum(self.dists,axis=0)
+                X = d.reshape(-1,1)
+                Z = hierarchy.linkage(X,'centroid')
+                c = hierarchy.fcluster(Z,np.median(d),criterion='distance')
+                c_med = [np.median(d[c==i]) for i in np.unique(c)]
+                c_best = int(np.unique(c)[np.argwhere(c_med == np.min(c_med))])
+                good_col = np.argwhere(c == c_best).flatten()
+                bad_col = np.argwhere(c != c_best).flatten()
+                self.lm_idx = self.lm_idx[good_col]
+                self.valid_cols = good_col
+                # then find other bad graphs
+                d = np.sum(self.dists,axis=1)
+                X = d.reshape(-1,1)
+                Z = hierarchy.linkage(X,'centroid')
+                c = hierarchy.fcluster(Z,np.median(d),criterion='distance')
+                c_med = [np.median(d[c==i]) for i in np.unique(c)]
+                c_best = int(np.unique(c)[np.argwhere(c_med == np.min(c_med))])
+                self.valid_rows = np.argwhere(c == c_best).flatten()
     def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
         coms = None
         if self.master:
@@ -343,7 +378,8 @@ class Ensemble:
             print('probable best eigenvector triplet is %s'%str(coms[best]))
         coms = self.p.shareData(coms)
         self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito,similarity=similarity)
-    def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
+    def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,
+                      VMD=False,Ovito=False,similarity=True):
         # share data among workers
         colors = []
         color_maps = []
@@ -385,6 +421,8 @@ class Ensemble:
         if self.master:
             self.dmap = dmap.DMap()
             self.dmap.set_params()
-            self.dmap.build(self.dists,landmarks=self.lm_idx)
+            self.dmap.build(self.dists,landmarks=self.lm_idx,
+                            valid_cols=self.valid_cols,
+                            valid_rows=self.valid_rows)
             print('Diffusion map construction complete')
             self.dmap.write()

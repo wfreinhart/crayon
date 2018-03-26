@@ -58,7 +58,8 @@ class NeighborList:
         return adjacency
 
 class AdaptiveCNA(NeighborList):
-    def setParams(self,r_max=40.,max_nbr=16,strict_rcut=True,near_nbr=6,geo_factor=1.2071):
+    def setParams(self,r_max=4.,max_nbr=16,
+                  strict_rcut=True,near_nbr=6,geo_factor=1.2071):
         self.r_max = r_max
         self.max_nbr = max_nbr
         self.strict_rcut = strict_rcut
@@ -81,7 +82,9 @@ class AdaptiveCNA(NeighborList):
         return neighbors
 
 class Voronoi(NeighborList):
-    def setParams(self,clustering=True,cluster_method='centroid',cluster_ratio=0.25):
+    def setParams(self,r_max=None,
+                  clustering=True,cluster_method='centroid',cluster_ratio=0.25):
+        self.r_max = r_max
         self.clustering = clustering
         self.cluster_method = cluster_method
         self.cluster_ratio = cluster_ratio
@@ -89,6 +92,12 @@ class Voronoi(NeighborList):
     def filterNeighbors(self,idx,neighbors,snap):
         # get neighbors from triangulation
         nn = np.array(neighbors[idx],dtype=np.int)
+        # remove negative IDs (Voro++ indicating that a particle is its own neighbor)
+        nn[nn<0] = snap.N + nn[nn<0]
+        # remove duplicates
+        nn = np.unique(nn)
+        # remove self
+        nn = nn[nn!=idx]
         # get displacement vectors and ask Snapshot to wrap them
         d_vec = snap.wrap(snap.xyz[nn,:] - snap.xyz[idx,:])
         # sort neighbors by increasing distance
@@ -96,8 +105,15 @@ class Voronoi(NeighborList):
         order = np.argsort(d_nbr)
         nn = np.array(nn)[order]
         d_nbr = d_nbr[order]
-        X = d_nbr.reshape(-1,1)
+        # apply maximum cutoff radius
+        if self.r_max is not None:
+            nn = nn[d_nbr <= self.r_max]
+            d_nbr = d_nbr[d_nbr <= self.r_max]
+            if len(nn) < 2:
+                nn = np.hstack(([idx],nn))
+                return nn
         # exclude far-away particles by clustering
+        X = d_nbr.reshape(-1,1)
         Z = hierarchy.linkage(X,self.cluster_method)
         c = hierarchy.fcluster(Z,self.cluster_ratio*d_nbr[0],criterion='distance')
         h_base = np.argwhere(c == c[0]).flatten()
@@ -105,6 +121,7 @@ class Voronoi(NeighborList):
         return nn
     # compute Delaunay triangulation with Voro++ library
     def getNeighbors(self,snap):
+        # build neighborlist with Voro++
         nl = _crayon.voropp(snap.xyz, snap.L, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
         neighbors = []
         for idx in range(snap.N):
