@@ -28,6 +28,11 @@ class NeighborList:
         pass
     def getNeighbors(self,snap):
         return [], []
+    def symmetrize(self,NL):
+        for i, nn in enumerate(NL):
+            for j in nn:
+                if i not in NL[j]:
+                    NL[j] = np.append(NL[j],i)
     # builds an adjacency matrix from the nearest neighbor list
     def particleAdjacency(self,i, NL):
         idx = NL[i].flatten()
@@ -132,6 +137,7 @@ class Voronoi(NeighborList):
             else:
                 nn = nl[idx]
             all_neighbors.append(np.array(nn,dtype=np.int))
+        self.symmetrize(all_neighbors)
         if len(np.unique(snap.T)) == 1:
             return all_neighbors, all_neighbors
         # use neighborhood to build multi-atom patterns
@@ -148,4 +154,5 @@ class Voronoi(NeighborList):
                 else:
                     nn = nl[i]
                 same_neighbors[t_idx[i]] = nn
+        self.symmetrize(same_neighbors)
         return same_neighbors, all_neighbors
