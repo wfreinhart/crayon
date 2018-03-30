@@ -20,14 +20,13 @@ except:
 class DMap:
     def __init__(self):
         self._cpp = PyDMap.DMap()
-        self.set_params()
+        self.alpha = 1.0
+        self.num_evec = 4
+        self.epsilon = None
         self.evals = None
         self.evecs = None
         self.evecs_ny = None
         self.color_coords = None
-    def set_params(self,num_evec=10,epsilon=None):
-        self.num_evec = num_evec
-        self.epsilon = epsilon
     def build(self,dists,landmarks=None,
               valid_cols=None,
               valid_rows=None):
@@ -35,20 +34,21 @@ class DMap:
             valid_rows = np.arange(dists.shape[0])
         if valid_cols is None:
             valid_cols = np.arange(dists.shape[1])
+        alpha_dists = np.power(dists,self.alpha)
         if landmarks is None:
-            D = dists
+            D = alpha_dists
             D = D[valid_rows,:]
             D = D[:,valid_cols]
         else:
-            D = dists[landmarks,:]
+            D = alpha_dists[landmarks,:]
             D = D[:,valid_cols]
-            L = dists[valid_rows,:]
+            L = alpha_dists[valid_rows,:]
             L = L[:,valid_cols]
         # compute landmark manifold
         self._cpp.set_dists(D)
         self._cpp.set_num_evec(self.num_evec)
         if self.epsilon is None:
-            self.epsilon = np.median(dists)
+            self.epsilon = np.median(alpha_dists)
         self._cpp.set_epsilon(self.epsilon)
         self._cpp.compute()
         self.evals = np.asarray(self._cpp.get_eval())
