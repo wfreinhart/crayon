@@ -24,7 +24,9 @@ def info():
 def partition(l):
     comm, size, rank, master = info()
     division = len(l) / float(size)
-    return [ l[int(round(division * i)): int(round(division * (i + 1)))] for i in xrange(size) ][rank]
+    p = [ l[int(round(division * i)): int(round(division * (i + 1)))] for i in xrange(size) ]
+    p.sort()
+    return p[::-1][rank]
 
 class ETA:
     def __init__(self,n=0,reports=1):
