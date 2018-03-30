@@ -153,7 +153,7 @@ class Ensemble:
         self.dists = None
         self.valid_cols = None
         self.valid_rows = None
-        self.dmap = None
+        self.dmap = dmap.DMap()
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
     def neighborhoodsFromFile(self,filenames,nl):
@@ -218,19 +218,29 @@ class Ensemble:
                         print('Warning: duplicate pattern lookup key detected during Ensemble.collect')
                     self.pattern_lookups[key] = val
             print('ensemble pattern collection complete, found %d unique patterns'%len(self.pattern_library.items))
-    def prune(self,min_freq=None):
+    def prune(self,num_random=None,num_top=None,min_freq=None,min_percentile=None):
         if not self.master:
             return
-        try:
-            min_freq = int(min_freq)
-        except:
-            raise RuntimeError('Must specify min_freq, and it must be castable to int')
         if self.pattern_mode:
             library = self.pattern_library
         else:
             library = self.graph_library
+        self.lm_idx = np.array([])
+        if num_top is not None:
+            self.lm_idx = np.sort(np.argsort(library.counts)[::-1][:num_top]).flatten()
+        elif min_freq is not None:
+            self.lm_idx = np.argwhere(library.counts >= min_freq).flatten()
+        elif min_percentile is not None:
+            self.lm_idx = np.argwhere(library.counts >= np.percentile(library.counts,min_percentile)).flatten()
+        else:
+            raise RuntimeError('must supply either num_landmarks or min_freq')
+        if num_random is not None:
+            remaining = range(len(library.counts))
+            for idx in self.lm_idx:
+                remaining.remove(idx)
+            random = np.random.choice(remaining,num_random)
+            self.lm_idx = np.sort(np.hstack((self.lm_idx,random)))
         n = len(library.sigs)
-        self.lm_idx = np.argwhere(library.counts >= min_freq).flatten()
         m = len(self.lm_idx)
         self.lm_sigs = [library.sigs[idx] for idx in self.lm_idx]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
@@ -349,8 +359,6 @@ class Ensemble:
                                swap=('/home/wfr/','/Users/wfr/mountpoint/'))
     def buildDMap(self):
         if self.master:
-            self.dmap = dmap.DMap()
-            self.dmap.set_params()
             self.dmap.build(self.dists,landmarks=self.lm_idx,
                             valid_cols=self.valid_cols,
                             valid_rows=self.valid_rows)
