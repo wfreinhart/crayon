@@ -21,8 +21,9 @@ except:
     foundFreud = False
 
 class NeighborList:
-    def __init__(self,second_shell=False):
+    def __init__(self,second_shell=(0,0),enforce_symmetry=True):
         self.second_shell = second_shell
+        self.enforce_symmetry = enforce_symmetry
         self.setParams()
     def setParams(self):
         pass
@@ -36,12 +37,12 @@ class NeighborList:
     # builds an adjacency matrix from the nearest neighbor list
     def particleAdjacency(self,i, NL):
         idx = NL[i].flatten()
-        if self.second_shell and len(idx) <= 12:
+        if len(idx) <= self.second_shell[0]:
             shell2 = []
             for j in range(len(idx)):
                 shell2 += list(NL[idx[j]])
             shell2 = np.unique(np.array(shell2,dtype=np.int))
-            if len(shell2) <= 24:
+            if len(shell2) <= self.second_shell[1]:
                 idx = np.array(shell2)
         idx = np.sort(idx) # enforce deterministic ordering
         n = len(idx)
@@ -83,8 +84,8 @@ class AdaptiveCNA(NeighborList):
         nl = nl.getNeighborList()
         neighbors = []
         for i in range(snap.N):
-            neighbors.append(nl[i,Rsq[i,:]<Rcut[i]])
-        return neighbors, []
+            neighbors.append(np.hstack(([i],nl[i,Rsq[i,:]<Rcut[i]])))
+        return neighbors, neighbors
 
 class Voronoi(NeighborList):
     def setParams(self,r_max=None,
@@ -137,7 +138,8 @@ class Voronoi(NeighborList):
             else:
                 nn = nl[idx]
             all_neighbors.append(np.array(nn,dtype=np.int))
-        self.symmetrize(all_neighbors)
+        if self.enforce_symmetry:
+            self.symmetrize(all_neighbors)
         if len(np.unique(snap.T)) == 1:
             return all_neighbors, all_neighbors
         # use neighborhood to build multi-atom patterns
@@ -154,5 +156,6 @@ class Voronoi(NeighborList):
                 else:
                     nn = nl[i]
                 same_neighbors[t_idx[i]] = nn
-        self.symmetrize(same_neighbors)
+        if self.enforce_symmetry:
+            self.symmetrize(same_neighbors)
         return same_neighbors, all_neighbors
