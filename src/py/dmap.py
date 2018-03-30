@@ -100,7 +100,7 @@ class DMap:
             c = np.cumsum(hy) / np.sum(hy)
             self.color_coords[:,i] = np.interp(r,0.5*(x[:-1]+x[1:]),c)
         nan_idx = np.argwhere(np.isnan(self.color_coords[:,-1])).flatten()
-        self.color_coords[nan_idx,:] = 0.
+        self.color_coords[nan_idx,:] = 1.
     def uncorrelatedTriplets(self):
         # first determine least correlated eigenvectors
         X = np.abs( np.corrcoef(np.transpose(self.color_coords[:,1:])) )
