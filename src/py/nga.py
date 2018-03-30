@@ -8,6 +8,7 @@
 
 from __future__ import print_function
 
+from crayon import bondorder
 from crayon import classifiers
 from crayon import parallel
 from crayon import neighborlist
@@ -86,12 +87,17 @@ class Snapshot:
             self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
         self.adjacency = self.nl.getAdjacency(self)
-    def buildLibrary(self):
+    def buildLibrary(self,q_thresh=None):
         self.graph_library = classifiers.GraphLibrary()
         if self.adjacency is None:
             if self.neighbors is None:
                 self.buildNeighborhoods()
             self.buildAdjacency()
+        if q_thresh is not None:
+            q_range = bondorder.computeQRange(self)
+            disordered = np.argwhere(q_range < q_thresh).flatten()
+            for idx in disordered:
+                self.adjacency[idx] = np.ones((1,1))
         self.graph_library.build(self.adjacency)
         if self.pattern_mode:
             self.pattern_library = classifiers.PatternLibrary()
@@ -141,8 +147,9 @@ class Snapshot:
             self.pattern_library = buff['pattern_library']
 
 class Ensemble:
-    def __init__(self,pattern_mode=False):
+    def __init__(self,pattern_mode=False,q_thresh=None):
         self.filenames = []
+        self.q_thresh = q_thresh
         self.graph_library = classifiers.GraphLibrary()
         self.graph_lookups = {}
         self.graphs = []
@@ -175,7 +182,7 @@ class Ensemble:
         self.collect()
     def insert(self,idx,snap):
         if snap.graph_library is None:
-            snap.buildLibrary()
+            snap.buildLibrary(q_thresh=self.q_thresh)
         self.graph_library.collect(snap.graph_library)
         self.graph_lookups[idx] = snap.graph_library.lookup
         if self.pattern_mode:
