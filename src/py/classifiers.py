@@ -101,7 +101,8 @@ class Library:
     def __init__(self):
         self.sigs   = []
         self.items = []
-        self.counts = np.array([])
+        self.counts = np.array([],dtype=np.int)
+        self.sizes = np.array([],dtype=np.int)
         self.index = {}
         self.lookup = {}
     def build(self):
@@ -112,7 +113,7 @@ class Library:
             return self.index[sig]
         except:
             return None
-    def encounter(self,item,count=1,add=True):
+    def encounter(self,item,count=1,size=0,add=True):
         R""" adds an object to the library and returns its index
 
         Args:
@@ -127,14 +128,16 @@ class Library:
         try:
             idx = self.index[sig]
             self.counts[idx] += count
+            self.sizes[idx] = max(self.sizes[idx],size)
         except:
             idx = len(self.items)
             self.sigs.append(sig)
             self.items.append(item)
             self.counts = np.append(self.counts,count)
+            self.sizes = np.append(self.sizes,size)
             self.index[sig] = idx
         return idx
-    def collect(self,others,counts=True):
+    def collect(self,others,counts=True,sizes=True):
         R""" merges other Library objects into this one
 
         Args:
@@ -148,7 +151,8 @@ class Library:
         for other in others:
             for idx in range(len(other.items)):
                 self.encounter(other.items[idx],
-                               count=(other.counts[idx] if counts else 0))
+                               count=(other.counts[idx] if counts else 0),
+                               size=(other.sizes[idx] if sizes else 0))
 
 class GraphLibrary(Library):
     R""" handles sets of graphs from snapshots and ensembles of snapshots
