@@ -19,6 +19,10 @@ set(CMAKE_MODULE_PATH
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3 -Wall")
 
+if( ${APPLE} )
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -framework Python")
+endif()
+
 if( ${CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT} )
     set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR} CACHE PATH "Install path prefix, prepended onto install directories." FORCE)
     message("-- Default install prefix detected, will install to default location ${CMAKE_INSTALL_PREFIX}")
