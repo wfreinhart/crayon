@@ -278,34 +278,50 @@ class Ensemble:
                 frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
             frame_maps.append(frame_data)
         return c, c_map, frame_maps
-    def computeDists(self,outlier_mode=None,outlier_thresh=None):
-        # use a master-slave paradigm for load balancing
-        task_list = []
-        if self.pattern_mode:
-            library = self.pattern_library
-        else:
-            library = self.graph_library
+    def computePatternDists(self):
+        # prepare task list
         if self.master:
-            n = len(library.sigs)
+            n = len(self.pattern_library.sigs)
             m = len(self.lm_sigs)
             self.dists = np.zeros( (n,m) ) + np.Inf # designate null values with Inf
             for i in range(n):
                 for j in range(m):
                     task_list.append( (i,self.lm_idx[j]) )
         # perform graph matching in parallel using MPI
-        items = self.p.shareData(library.items)
+        items = self.p.shareData(self.pattern_library.items)
         eval_func = lambda task, data: data[task[0]] - data[task[1]]
         result_list = self.p.computeQueue(function=eval_func,
                                           tasks=task_list,
                                           reports=10)
+        # convert results into numpy array
         if self.master:
-            # convert results into numpy array
             for k, d in enumerate(result_list):
                 i, j = task_list[k]
                 jid = np.argwhere(self.lm_idx == j)[0]
                 self.dists[i,jid] = d
+    def computeGraphDists(self):
+        if not self.master:
+            return
+        # prepare NGDVs for distance calculation
+        dat = []
+        for g in self.graph_library.items:
+            dat.append(g.ngdv)
+        dat = np.array(dat)
+        # perform distance calculation
+        n = len(self.graph_library.sigs)
+        m = len(self.lm_sigs)
+        self.dists = np.zeros((n,m))
+        for i, lm in enumerate(self.lm_idx):
+            self.dists[:,i] = np.linalg.norm(dat-dat[lm],axis=1)
+    def computeDists(self):
+        if self.pattern_mode:
+            self.computePatternDists()
+        else:
+            self.computeGraphDists()
+    def detectDistOutliers(self,mode=None,thresh=None):
+        if self.master:
             # detect outliers, if requested
-            if outlier_mode == 'agglomerative':
+            if mode == 'agglomerative':
                 # filter outliers such as vapor particles
                 # first find bad landmarks
                 d = np.sum(self.dists,axis=0)
@@ -327,10 +343,10 @@ class Ensemble:
                 c_med = [np.median(d[c==i]) for i in np.unique(c)]
                 c_best = int(np.unique(c)[np.argwhere(c_med == np.min(c_med))])
                 self.valid_rows = np.argwhere(c == c_best).flatten()
-            elif outlier_mode == 'cutoff':
+            elif mode == 'cutoff':
                 self.valid_cols = np.arange(self.dists.shape[1])
                 d = np.min(self.dists,axis=1)
-                self.valid_rows = np.argwhere(d < outlier_thresh).flatten()
+                self.valid_rows = np.argwhere(d < thresh).flatten()
     def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
         coms = None
         if self.master:
