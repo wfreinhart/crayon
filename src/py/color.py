@@ -36,10 +36,8 @@ def neighborSimilarity(f_map,neighbors,coords):
         nn = np.array(f_map[np.asarray(neighbors[i])],dtype=np.int)
         delta = np.sqrt(np.sum((coords[nn,:] - coords[f_map[i],:])**2.,1))
         f_dat[i,0] = np.mean(delta)
-        f_dat[i,1] = np.min(delta)
-    for i in range(N):
-        nn = np.array(f_map[np.asarray(neighbors[i])],dtype=np.int)
-        f_dat[i,2] = np.mean(f_dat[nn,0])
+        f_dat[i,1] = np.median(delta)
+        f_dat[i,2] = np.min(delta)
     return f_dat
 
 def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='add',suffix=''):
