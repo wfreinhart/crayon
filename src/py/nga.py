@@ -87,7 +87,7 @@ class Snapshot:
             self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
         self.adjacency = self.nl.getAdjacency(self)
-    def buildLibrary(self,q_thresh=None):
+    def buildLibrary(self,q_thresh=None,cluster=False):
         self.graph_library = classifiers.GraphLibrary()
         if self.adjacency is None:
             if self.neighbors is None:
@@ -99,6 +99,8 @@ class Snapshot:
             for idx in disordered:
                 self.adjacency[idx] = np.ones((1,1))
         self.graph_library.build(self.adjacency)
+        if cluster:
+            self.graph_library.sizes = neighborlist.largest_clusters(self,self.graph_library)
         if self.pattern_mode:
             self.pattern_library = classifiers.PatternLibrary()
             self.map_graphs = self.mapTo(self.graph_library)
@@ -147,9 +149,10 @@ class Snapshot:
             self.pattern_library = buff['pattern_library']
 
 class Ensemble:
-    def __init__(self,pattern_mode=False,q_thresh=None):
+    def __init__(self,pattern_mode=False,q_thresh=None,cluster=False):
         self.filenames = []
         self.q_thresh = q_thresh
+        self.cluster = cluster
         self.graph_library = classifiers.GraphLibrary()
         self.graph_lookups = {}
         self.graphs = []
@@ -182,7 +185,7 @@ class Ensemble:
         self.collect()
     def insert(self,idx,snap):
         if snap.graph_library is None:
-            snap.buildLibrary(q_thresh=self.q_thresh)
+            snap.buildLibrary(q_thresh=self.q_thresh,cluster=self.cluster)
         self.graph_library.collect(snap.graph_library)
         self.graph_lookups[idx] = snap.graph_library.lookup
         if self.pattern_mode:
@@ -225,28 +228,34 @@ class Ensemble:
                         print('Warning: duplicate pattern lookup key detected during Ensemble.collect')
                     self.pattern_lookups[key] = val
             print('ensemble pattern collection complete, found %d unique patterns'%len(self.pattern_library.items))
-    def prune(self,num_random=None,num_top=None,min_freq=None,min_percentile=None):
+    def prune(self,num_random=None,num_top=None,min_freq=None,min_percentile=None,mode='frequency'):
         if not self.master:
             return
         if self.pattern_mode:
             library = self.pattern_library
         else:
             library = self.graph_library
+        if mode == 'frequency':
+            vals = library.counts
+        elif mode == 'clustersize':
+            vals = library.sizes
+        else:
+            raise ValueError('must specify a valid mode (frequency of clustersize)')
         self.lm_idx = np.array([])
         if num_top is not None:
-            self.lm_idx = np.sort(np.argsort(library.counts)[::-1][:num_top]).flatten()
+            self.lm_idx = np.sort(np.argsort(vals)[::-1][:num_top]).flatten()
         elif min_freq is not None:
-            self.lm_idx = np.argwhere(library.counts >= min_freq).flatten()
+            self.lm_idx = np.argwhere(vals >= min_freq).flatten()
         elif min_percentile is not None:
-            self.lm_idx = np.argwhere(library.counts >= np.percentile(library.counts,min_percentile)).flatten()
+            self.lm_idx = np.argwhere(vals >= np.percentile(vals,min_percentile)).flatten()
         else:
             raise RuntimeError('must supply either num_landmarks or min_freq')
         if num_random is not None:
-            remaining = range(len(library.counts))
+            remaining = range(len(vals))
             for idx in self.lm_idx:
                 remaining.remove(idx)
             random = np.random.choice(remaining,num_random)
-            self.lm_idx = np.sort(np.hstack((self.lm_idx,random)))
+            self.lm_idx = np.unique(np.hstack((self.lm_idx,random)))
         n = len(library.sigs)
         m = len(self.lm_idx)
         self.lm_sigs = [library.sigs[idx] for idx in self.lm_idx]
@@ -269,7 +278,7 @@ class Ensemble:
                 frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
             frame_maps.append(frame_data)
         return c, c_map, frame_maps
-    def computeDists(self,detect_outliers=True):
+    def computeDists(self,outlier_mode=None,outlier_thresh=None):
         # use a master-slave paradigm for load balancing
         task_list = []
         if self.pattern_mode:
@@ -291,17 +300,17 @@ class Ensemble:
                                           reports=10)
         if self.master:
             # convert results into numpy array
-            for k in range(len(result_list)):
+            for k, d in enumerate(result_list):
                 i, j = task_list[k]
                 jid = np.argwhere(self.lm_idx == j)[0]
-                d = result_list[k]
                 self.dists[i,jid] = d
             # detect outliers, if requested
-            if detect_outliers:
+            if outlier_mode == 'agglomerative':
                 # filter outliers such as vapor particles
                 # first find bad landmarks
                 d = np.sum(self.dists,axis=0)
                 X = d.reshape(-1,1)
+                #
                 Z = hierarchy.linkage(X,'centroid')
                 c = hierarchy.fcluster(Z,np.median(d),criterion='distance')
                 c_med = [np.median(d[c==i]) for i in np.unique(c)]
@@ -318,6 +327,10 @@ class Ensemble:
                 c_med = [np.median(d[c==i]) for i in np.unique(c)]
                 c_best = int(np.unique(c)[np.argwhere(c_med == np.min(c_med))])
                 self.valid_rows = np.argwhere(c == c_best).flatten()
+            elif outlier_mode == 'cutoff':
+                self.valid_cols = np.arange(self.dists.shape[1])
+                d = np.min(self.dists,axis=1)
+                self.valid_rows = np.argwhere(d < outlier_thresh).flatten()
     def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
         coms = None
         if self.master:
@@ -327,6 +340,9 @@ class Ensemble:
         self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito,similarity=similarity)
     def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,
                       VMD=False,Ovito=False,similarity=True):
+        # enforce list-of-lists style triplets
+        if type(trips[0]) == int:
+            trips = [trips]
         # share data among workers
         colors = []
         color_maps = []

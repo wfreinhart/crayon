@@ -20,6 +20,30 @@ except:
     print('Warning: freud python module not found, neighborlist.AdaptiveCNA will not be available')
     foundFreud = False
 
+def visit(i,snap,particles,visited,members):
+    idx = int(np.argwhere(particles==i))
+    members.append(i)
+    visited[idx] = 1
+    nn = [x for x in snap.neighbors[i] if x in particles]
+    for j in nn:
+        jdx = np.argwhere(particles==j)
+        if visited[jdx] == 0:
+            visit(j,snap,particles,visited,members)
+
+def largest_clusters(snap,library):
+    sizes = []
+    for i, sig in enumerate(library.sigs):
+        particles = library.lookup[sig]
+        visited = np.zeros(len(particles))
+        largest = 0
+        while np.sum(visited) < len(particles):
+            root = particles[np.argwhere(visited == 0).flatten()[0]]
+            members = []
+            visit(root,snap,particles,visited,members)
+            largest = max(largest,len(members))
+        sizes.append(largest)
+    return np.array(sizes)
+
 class NeighborList:
     def __init__(self,second_shell=(0,0),enforce_symmetry=True):
         self.second_shell = second_shell
@@ -44,7 +68,7 @@ class NeighborList:
             shell2 = np.unique(np.array(shell2,dtype=np.int))
             if len(shell2) <= self.second_shell[1]:
                 idx = np.array(shell2)
-        idx = np.sort(idx) # enforce deterministic ordering
+        idx = np.hstack(([i],np.sort(idx[idx!=i]))) # enforce deterministic ordering
         n = len(idx)
         A = np.zeros((n,n),np.int8)
         for j in range(len(idx)):
