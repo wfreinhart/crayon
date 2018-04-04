@@ -163,6 +163,7 @@ class Ensemble:
         self.dists = None
         self.valid_cols = None
         self.valid_rows = None
+        self.invalid_rows = np.array([])
         self.dmap = dmap.DMap()
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
@@ -343,10 +344,12 @@ class Ensemble:
                 c_med = [np.median(d[c==i]) for i in np.unique(c)]
                 c_best = int(np.unique(c)[np.argwhere(c_med == np.min(c_med))])
                 self.valid_rows = np.argwhere(c == c_best).flatten()
+                self.invalid_rows = np.argwhere(c != c_best).flatten()
             elif mode == 'cutoff':
                 self.valid_cols = np.arange(self.dists.shape[1])
                 d = np.min(self.dists,axis=1)
                 self.valid_rows = np.argwhere(d < thresh).flatten()
+                self.invalid_rows = np.argwhere(d >= thresh).flatten()
     def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
         coms = None
         if self.master:
@@ -355,7 +358,8 @@ class Ensemble:
         coms = self.p.shareData(coms)
         self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito,similarity=similarity)
     def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,
-                      VMD=False,Ovito=False,similarity=True):
+                      VMD=False,Ovito=False,similarity=True,
+                      rotation=None):
         # enforce list-of-lists style triplets
         if type(trips[0]) == int:
             trips = [trips]
@@ -386,6 +390,8 @@ class Ensemble:
                 else:
                     sim = color_coords[frame_maps[t][f].reshape(-1,1),np.array(trip)]
                 mapped_color = color_maps[t][frame_maps[t][f]].reshape(-1,1)
+                for inv in self.invalid_rows:
+                    mapped_color[mapped_color==inv] = -1
                 f_dat = np.hstack((mapped_color,sim))
                 np.savetxt(filename + '_%d%d%d.cmap'%trip, f_dat)
         if not self.master:
@@ -393,8 +399,11 @@ class Ensemble:
         # write visualization scripts
         for t, trip in enumerate(trips):
             if VMD:
+                trip_colors = colors[t]
+                if rotation is not None:
+                    trip_colors = color.rotate(trip_colors,rotation[0],rotation[1])
                 color.writeVMD('%s_%d%d%d.tcl'%(prefix,trip[0],trip[1],trip[2]),
-                               self.filenames, colors[t], trip, f_dat.shape[1], sigma=sigma,
+                               self.filenames, trip_colors, trip, f_dat.shape[1], sigma=sigma,
                                swap=('/home/wfr/','/Users/wfr/mountpoint/'))
     def buildDMap(self):
         if self.master:

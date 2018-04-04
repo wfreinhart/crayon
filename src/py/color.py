@@ -40,6 +40,21 @@ def neighborSimilarity(f_map,neighbors,coords):
         f_dat[i,2] = np.min(delta)
     return f_dat
 
+def rotate(coords,axis,turns):
+    theta = int(turns) * 0.5 * np.pi
+    R = []
+    R.append( np.array([[1, 0,              0],
+                        [0, np.cos(theta), -np.sin(theta)],
+                        [0, np.sin(theta),  np.cos(theta)]]) )
+    R.append( np.array([[ np.cos(theta), 0, np.sin(theta)],
+                        [ 0,             1, 0],
+                        [-np.sin(theta), 0, np.cos(theta)]]) )
+    R.append( np.array([[np.cos(theta), -np.sin(theta), 0],
+                        [np.sin(theta),  np.cos(theta), 0],
+                        [0,              0,             1]]) )
+    t = 0.5*np.ones(3)
+    return t+np.matmul(coords-t,R[axis])
+
 def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='add',suffix=''):
     # create a VMD draw script
     fid = open(filename,'w')
