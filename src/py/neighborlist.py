@@ -6,6 +6,7 @@
 # This file is part of the crayon project, released under the Modified BSD License.
 
 from __future__ import print_function
+import sys
 
 import numpy as np
 
@@ -20,15 +21,22 @@ except:
     print('Warning: freud python module not found, neighborlist.AdaptiveCNA will not be available')
     foundFreud = False
 
-def visit(i,snap,particles,visited,members):
+def visit(i,snap,particles,visited,members,level,remaining):
+    if level >= sys.getrecursionlimit()/2:
+        return False
     idx = int(np.argwhere(particles==i))
+    if visited[idx] == 1:
+        return True
     members.append(i)
     visited[idx] = 1
     nn = [x for x in snap.neighbors[i] if x in particles]
     for j in nn:
         jdx = np.argwhere(particles==j)
         if visited[jdx] == 0:
-            visit(j,snap,particles,visited,members)
+            result = visit(j,snap,particles,visited,members,level+1,remaining)
+            if not result:
+                remaining += [j]
+    return True
 
 def largest_clusters(snap,library):
     sizes = []
@@ -37,9 +45,11 @@ def largest_clusters(snap,library):
         visited = np.zeros(len(particles))
         largest = 0
         while np.sum(visited) < len(particles):
-            root = particles[np.argwhere(visited == 0).flatten()[0]]
+            remaining = [particles[np.argwhere(visited == 0).flatten()[0]]]
             members = []
-            visit(root,snap,particles,visited,members)
+            while len(remaining) > 0:
+                root = remaining.pop()
+                result = visit(root,snap,particles,visited,members,1,remaining)
             largest = max(largest,len(members))
         sizes.append(largest)
     return np.array(sizes)
