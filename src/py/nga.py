@@ -124,12 +124,10 @@ class Snapshot:
         pbc = np.asarray([dim in self.pbc for dim in 'xyz'],dtype=np.float)
         w = v - self.L * np.round( v / self.L * pbc)
         return w
-    def save(self,filename,neighbors=False,adjacency=False,library=False):
+    def save(self,filename,neighbors=False,library=False):
         buff = {}
         if neighbors:
             buff['neighbors'] = self.neighbors
-        if adjacency:
-            buff['adjacency'] = self.adjacency
         if library:
             buff['graph_library'] = self.graph_library
             buff['pattern_library'] = self.pattern_library
@@ -141,9 +139,6 @@ class Snapshot:
         if 'neighbors' in buff:
             self.neighbors = buff['neighbors']
             self.N = len(self.neighbors)
-        if 'adjacency' in buff:
-            self.adjacency = buff['adjacency']
-            self.N = len(self.adjacency)
         if 'graph_library' in buff:
             self.graph_library = buff['graph_library']
         if 'pattern_library' in buff:
@@ -179,7 +174,7 @@ class Ensemble:
             # create snapshot instance and build neighborhoods
             snap = Snapshot(filename,pbc='xyz',nl=nl,pattern_mode=self.pattern_mode)
             self.insert(f,snap)
-            snap.save(filename + '.nga',adjacency=True,neighbors=True)
+            snap.save(filename + '.nga',neighbors=True)
         if self.pattern_mode:
             print('rank %d tasks complete, found %d unique graphs and %d unique patterns'%(self.rank,len(self.graph_library.items),len(self.pattern_library.items)))
         else:
