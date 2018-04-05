@@ -8,6 +8,7 @@
 
 from __future__ import print_function
 
+from crayon import _crayon
 from crayon import bondorder
 from crayon import classifiers
 from crayon import parallel
@@ -86,7 +87,7 @@ class Snapshot:
         else:
             self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
-        self.adjacency = self.nl.getAdjacency(self)
+        self.adjacency = _crayon.buildGraphs(self.neighbors)
     def buildLibrary(self,q_thresh=None,cluster=False):
         self.graph_library = classifiers.GraphLibrary()
         if self.adjacency is None:

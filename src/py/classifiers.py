@@ -47,19 +47,17 @@ class Graph(Classifier):
     """
     def __init__(self,A):
         # instantiate a Crayon::Graph object
-        self.C = _crayon.graph(A)
+        self.C = _crayon.neighborhood(A)
+        # retrieve adjacency matrix
         self.adj = self.C.adj()
-        # compute its Graphlet Degree Distribution
-        self.gdd = self.C.gdd()
         # compute its Graphlet Degree Vector
         self.gdv = self.C.gdv()
         # convert node-wise to graph-wise graphlet frequencies
         self.ngdv = np.sum(self.gdv,0) / max(float(np.sum(self.gdv)),1.)
         # build a hashable representation of the graph
-        s_nodes = str(len(self.adj))
-        s_edges = str(np.sum(self.adj))
+        s_nodes = str(len(self.gdv))
         s_gdv = str(np.sum(self.gdv,0).tolist()).replace(' ','')
-        self.s = '%s:%s:%s'%(s_nodes,s_edges,s_gdv)
+        self.s = '%s:%s'%(s_nodes,s_gdv)
     def __sub__(self,other):
         R""" difference between this and another Graph, just the norm
         between graph-wide Graphlet Degree Vectors

@@ -130,9 +130,9 @@ void PyGraph::computeGDD()
 
 void export_PyGraph(pybind11::module& m)
     {
-    pybind11::class_<Graph>(m,"_graph")
+    pybind11::class_<Graph>(m,"graph")
         .def(pybind11::init<const unsigned int>());
-    pybind11::class_<PyGraph>(m,"graph")
+    pybind11::class_<PyGraph>(m,"neighborhood")
         .def(pybind11::init<const Eigen::MatrixXi &>())
         .def(pybind11::init<const Graph &>())
         .def("adj", &PyGraph::getAdj)
