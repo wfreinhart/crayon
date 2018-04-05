@@ -163,7 +163,7 @@ class Voronoi(NeighborList):
     # compute Delaunay triangulation with Voro++ library
     def getNeighbors(self,snap):
         # build all-atom neighborlist with Voro++
-        nl = _crayon.voropp(snap.xyz, snap.L,
+        nl, areas = _crayon.voropp(snap.xyz, snap.L,
                             'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
         all_neighbors = []
         for idx in range(snap.N):
