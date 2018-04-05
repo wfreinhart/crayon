@@ -10,17 +10,28 @@
 namespace crayon
 {
 
+PyGraph::PyGraph()
+    {
+    }
+
 PyGraph::PyGraph(const Eigen::MatrixXi &A)
     : A_(A)
     {
-    build();
+    buildFromAdj();
+    setup();
+    }
+
+PyGraph::PyGraph(const Graph &G)
+    : G_(G)
+    {
+    setup();
     }
 
 PyGraph::~PyGraph()
     {
     }
 
-void PyGraph::build()
+void PyGraph::buildFromAdj()
     {
     // setup graph instance
     std::map<int,Graph::vertex_descriptor> map;
@@ -48,6 +59,10 @@ void PyGraph::build()
                 }
             }
         }
+    }
+
+void PyGraph::setup()
+    {
     // clean up graph and initialize orca object
     remove_edge_loops(G_);
     std::vector<std::pair<size_t,size_t>> edges;
@@ -115,8 +130,11 @@ void PyGraph::computeGDD()
 
 void export_PyGraph(pybind11::module& m)
     {
+    pybind11::class_<Graph>(m,"_graph")
+        .def(pybind11::init<const unsigned int>());
     pybind11::class_<PyGraph>(m,"graph")
         .def(pybind11::init<const Eigen::MatrixXi &>())
+        .def(pybind11::init<const Graph &>())
         .def("adj", &PyGraph::getAdj)
         .def("gdv", &PyGraph::getGDV)
         .def("gdd", &PyGraph::getGDD)

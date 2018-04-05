@@ -8,16 +8,24 @@
 #ifndef SRC_NEIGHBORS_H_
 #define SRC_NEIGHBORS_H_
 
+#include <algorithm>
+
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <pybind11/stl.h>
 
 #include <Eigen/Core>
 
+#include <Graph.hpp>
+
 #include <voro++/voro++.hh>
+
+#include "PyGraph.h"
 
 namespace crayon
 {
+
+std::vector<Graph> buildGraphs(std::vector<std::vector<int>> NL);
 
 std::vector<std::vector<int>> VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
     const bool x_pbc, const bool y_pbc, const bool z_pbc);

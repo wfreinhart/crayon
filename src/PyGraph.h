@@ -30,10 +30,15 @@ namespace crayon
     class PyGraph
         {
         public:
-        PyGraph(const Eigen::MatrixXi &A); // constructor
+        PyGraph(); // empty constructor
+        PyGraph(const Eigen::MatrixXi &A); // construct from numpy adjacency matrix
+        PyGraph(const Graph &G); // construct from Graph object
         ~PyGraph(); // destructor
 
-        void build();
+        void setGraph(const Graph &G) { G_ = G; }
+
+        void buildFromAdj();
+        void setup();
 
         const Eigen::MatrixXi getAdj() const { return A_; }
 

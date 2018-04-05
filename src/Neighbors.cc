@@ -10,6 +10,44 @@
 namespace crayon
 {
 
+std::vector<Graph> buildGraphs(std::vector<std::vector<int>> NL)
+    {
+    std::vector<Graph> graphs;
+    graphs.resize(NL.size());
+    for( int i = 0; i < NL.size(); i++ )
+        {
+        std::vector<int> idx = NL[i];
+        std::map<int,Graph::vertex_descriptor> map;
+        Graph::vertex_descriptor n = idx.size();
+        Graph G = Graph(n);
+        G[boost::graph_bundle].label = "AdjMat";
+        // fill nodes first
+        for( int j = 0; j < n; j++ )
+            {
+            map[j] = j;
+            Graph::vertex_descriptor v = map[j];
+            G[v].label = std::to_string(j+1);
+            }
+        // now loop through nodes and fill edges
+        // assumes symmetry! (Orca.cpp:47 symmetrizes anyways)
+        for( int j : idx )
+            {
+            for( int k : NL[j] )
+                {
+                if( std::find(NL[j].begin(), NL[j].end(), k) != NL[j].end() )
+                    {
+                    Graph::vertex_descriptor u = map[j];
+                    Graph::vertex_descriptor v = map[k];
+                    auto e = add_edge(u, v, G);
+                    G[e.first].label = std::to_string(j+1) + "-" + std::to_string(k+1);
+                    }
+                }
+            }
+        graphs[i] = G;
+        }
+    return graphs;
+    }
+
 std::vector<std::vector<int>> VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
     const bool x_pbc, const bool y_pbc, const bool z_pbc)
     {
@@ -49,6 +87,7 @@ std::vector<std::vector<int>> VoroNeighbors(const Eigen::MatrixXf &R, const Eige
 void export_VoroNeighbors(pybind11::module& m)
     {
     m.def("voropp",&VoroNeighbors);
+    m.def("buildGraphs",&buildGraphs);
     }
 
 }  // end namespace crayon
