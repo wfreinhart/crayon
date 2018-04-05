@@ -37,13 +37,18 @@ class Snapshot:
         nl (crayon::Neighborlist): a neighborlist generation class
         pbc (str) (optional): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz',pattern_mode=False):
+    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz'):
         # initialize class member variables
         self.neighbors = None
         self.adjacency = None
         self.graph_library = None
-        self.pattern_mode = pattern_mode
         self.pattern_library = None
+        # default options for building libraries
+        self.pattern_mode = False
+        self.cluster = True
+        self.shell_min = 0
+        self.shell_max = 0
+        self.q_thresh = None
         # load from file
         if reader is None:
             filename = reader_input
@@ -87,20 +92,37 @@ class Snapshot:
         else:
             self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
-        self.adjacency = _crayon.buildGraphs(self.neighbors)
-    def buildLibrary(self,q_thresh=None,cluster=False):
+        self.adjacency = _crayon.buildGraphs(self.neighbors,self.shell_min,self.shell_max)
+    def parseOptions(self,options):
+        # use multi-atom patterns?
+        if 'pattern_mode' in options:
+            self.pattern_mode = options['pattern_mode']
+        # perform clustering to find relevant structures?
+        if 'cluster' in options:
+            self.cluster = options['cluster']
+        # threshold for expanding to second neighbor shell
+        if 'shell_min' in options:
+            self.shell_min = options['shell_min']
+        # threshold for pruning back to first neighbor shell
+        if 'shell_max' in options:
+            self.shell_max = options['shell_max']
+        # threshold for spherical harmonics
+        if 'q_thresh' in options:
+            self.q_thresh = options['q_thresh']
+    def buildLibrary(self,**kwargs):
+        self.parseOptions(kwargs)
         self.graph_library = classifiers.GraphLibrary()
         if self.adjacency is None:
             if self.neighbors is None:
                 self.buildNeighborhoods()
             self.buildAdjacency()
-        if q_thresh is not None:
+        if self.q_thresh is not None:
             q_range = bondorder.computeQRange(self)
-            disordered = np.argwhere(q_range < q_thresh).flatten()
+            disordered = np.argwhere(q_range < self.q_thresh).flatten()
             for idx in disordered:
                 self.adjacency[idx] = np.ones((1,1))
         self.graph_library.build(self.adjacency)
-        if cluster:
+        if self.cluster:
             self.graph_library.sizes = neighborlist.largest_clusters(self,self.graph_library)
         if self.pattern_mode:
             self.pattern_library = classifiers.PatternLibrary()
@@ -145,14 +167,18 @@ class Snapshot:
             self.pattern_library = buff['pattern_library']
 
 class Ensemble:
-    def __init__(self,pattern_mode=False,q_thresh=None,cluster=False):
+    def __init__(self,**kwargs):
+        # evaluate optoins
+        self.options = kwargs
+        if 'pattern_mode' in self.options:
+            self.pattern_mode = self.options['pattern_mode']
+        else:
+            self.pattern_mode = False
+        # set default values
         self.filenames = []
-        self.q_thresh = q_thresh
-        self.cluster = cluster
         self.graph_library = classifiers.GraphLibrary()
         self.graph_lookups = {}
         self.graphs = []
-        self.pattern_mode = pattern_mode
         self.pattern_library = classifiers.PatternLibrary()
         self.pattern_lookups = {}
         self.patterns = []
@@ -172,7 +198,7 @@ class Ensemble:
             filename = self.filenames[f]
             print('rank %d of %d will process %s'%(self.rank,self.size,filename))
             # create snapshot instance and build neighborhoods
-            snap = Snapshot(filename,pbc='xyz',nl=nl,pattern_mode=self.pattern_mode)
+            snap = Snapshot(filename,pbc='xyz',nl=nl)
             self.insert(f,snap)
             snap.save(filename + '.nga',neighbors=True)
         if self.pattern_mode:
@@ -182,7 +208,7 @@ class Ensemble:
         self.collect()
     def insert(self,idx,snap):
         if snap.graph_library is None:
-            snap.buildLibrary(q_thresh=self.q_thresh,cluster=self.cluster)
+            snap.buildLibrary(**self.options)
         self.graph_library.collect(snap.graph_library)
         self.graph_lookups[idx] = snap.graph_library.lookup
         if self.pattern_mode:

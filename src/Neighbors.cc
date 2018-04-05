@@ -10,13 +10,32 @@
 namespace crayon
 {
 
-std::vector<Graph> buildGraphs(std::vector<std::vector<int>> NL)
+std::vector<Graph> buildGraphs(const std::vector<std::vector<int>> NL,
+                               unsigned int ss_min, unsigned int ss_max)
     {
     std::vector<Graph> graphs;
     graphs.resize(NL.size());
     for( int i = 0; i < NL.size(); i++ )
         {
         std::vector<int> idx = NL[i];
+        // include second neighbor shell if threshold is not met
+        if( idx.size() < ss_min )
+            {
+            std::set<int> s( idx.begin(), idx.end() );
+            for( int j : idx )
+                {
+                for( int k : NL[j] )
+                    {
+                    s.insert(k);
+                    }
+                if( ss_max > 0 && s.size() >= ss_max ) break;
+                }
+            if( ss_max == 0 || s.size() < ss_max )
+                {
+                idx.assign( s.begin(), s.end() );
+                }
+            }
+        // build edge list from neighbor list
         std::map<int,Graph::vertex_descriptor> map;
         Graph::vertex_descriptor n = idx.size();
         Graph G = Graph(n);
