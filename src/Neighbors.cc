@@ -24,15 +24,15 @@ std::vector<Graph> buildGraphs(std::vector<std::vector<int>> NL)
         // fill nodes first
         for( int j = 0; j < n; j++ )
             {
-            map[j] = j;
+            map[idx[j]] = j;
             Graph::vertex_descriptor v = map[j];
-            G[v].label = std::to_string(j+1);
+            G[v].label = std::to_string(idx[j]+1);
             }
         // now loop through nodes and fill edges
         // assumes symmetry! (Orca.cpp:47 symmetrizes anyways)
         for( int j : idx )
             {
-            for( int k : NL[j] )
+            for( int k : idx )
                 {
                 if( std::find(NL[j].begin(), NL[j].end(), k) != NL[j].end() )
                     {
