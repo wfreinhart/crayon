@@ -166,7 +166,7 @@ class Voronoi(NeighborList):
         Z = hierarchy.linkage(X,self.cluster_method)
         c = hierarchy.fcluster(Z,self.cluster_ratio*d_nbr[0],criterion='distance')
         h_base = np.argwhere(c == c[0]).flatten()
-        return np.hstack((0,nn[h_base]))
+        return np.hstack((snap_idx,nn[h_base]))
     # compute Delaunay triangulation with Voro++ library
     def getNeighbors(self,snap):
         # build all-atom neighborlist with Voro++
@@ -174,7 +174,6 @@ class Voronoi(NeighborList):
                             'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
         all_neighbors = []
         for idx in range(snap.N):
-            print(idx)
             if self.clustering:
                 nn = self.filterNeighbors(idx,idx,nl,snap)
             else:
