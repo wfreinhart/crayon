@@ -28,7 +28,8 @@ namespace crayon
 std::vector<Graph> buildGraphs(const std::vector<std::vector<int>> NL,
                                unsigned int ss_min, unsigned int ss_max);
 
-std::tuple< std::vector<std::vector<int>>, std::vector<std::vector<double>> > VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
+std::vector<std::vector<int>>
+    VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
     const bool x_pbc, const bool y_pbc, const bool z_pbc);
 
 void export_VoroNeighbors(pybind11::module& m);
