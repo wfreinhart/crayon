@@ -143,9 +143,6 @@ class Voronoi(NeighborList):
         d_vec = snap.wrap(snap.xyz[nn,:] - snap.xyz[snap_idx,:])
         # sort neighbors by increasing distance
         d_nbr = np.sqrt(np.sum((d_vec)**2.,1))
-        order = np.argsort(d_nbr)
-        nn = np.array(nn)[order]
-        d_nbr = d_nbr[order]
         # apply maximum cutoff radius
         if self.r_max is not None:
             nn = nn[d_nbr <= self.r_max]
@@ -153,17 +150,27 @@ class Voronoi(NeighborList):
             if len(nn) < 2:
                 nn = np.hstack(([snap_idx],nn))
                 return nn
-        # exclude far-away particles by clustering
+        # find sorted order
+        order = np.argsort(d_nbr)
+        nn = nn[order]
+        d_nbr = d_nbr[order]
+        # remove entries that will never appear in the first cluster
+        thresh = self.cluster_ratio * d_nbr[0]
+        delta = np.diff(d_nbr)
+        valid = np.hstack((0,np.argwhere(delta < thresh).flatten()+1))
+        # check if all entries will always belong to one cluster
+        if d_nbr[valid[-1]] - d_nbr[valid[0]] < thresh:
+            return np.hstack(([snap_idx],nn[valid]))
+        # do scipy clustering method
         X = d_nbr.reshape(-1,1)
         Z = hierarchy.linkage(X,self.cluster_method)
         c = hierarchy.fcluster(Z,self.cluster_ratio*d_nbr[0],criterion='distance')
         h_base = np.argwhere(c == c[0]).flatten()
-        nn = np.hstack(([snap_idx],nn[h_base]))
-        return nn
+        return np.hstack((0,nn[h_base]))
     # compute Delaunay triangulation with Voro++ library
     def getNeighbors(self,snap):
         # build all-atom neighborlist with Voro++
-        nl, areas = _crayon.voropp(snap.xyz, snap.L,
+        nl = _crayon.voropp(snap.xyz, snap.L,
                             'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
         all_neighbors = []
         for idx in range(snap.N):
