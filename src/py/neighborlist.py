@@ -174,6 +174,7 @@ class Voronoi(NeighborList):
                             'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
         all_neighbors = []
         for idx in range(snap.N):
+            print(idx)
             if self.clustering:
                 nn = self.filterNeighbors(idx,idx,nl,snap)
             else:
