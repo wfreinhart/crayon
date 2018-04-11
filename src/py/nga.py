@@ -455,3 +455,4 @@ class Ensemble:
             self.dmap.write()
             np.savetxt('graph-counts.dat',self.graph_library.counts)
             np.savetxt('graph-sizes.dat',self.graph_library.sizes)
+            np.savetxt('graph-landmarks.dat',self.lm_idx)
