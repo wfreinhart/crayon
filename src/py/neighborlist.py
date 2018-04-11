@@ -38,10 +38,27 @@ def visit(i,snap,particles,visited,members,level,remaining):
                 remaining += [j]
     return True
 
-def largest_clusters(snap,library):
+def largest_clusters(snap,library,thresh=None):
     sizes = []
+    if thresh is not None:
+        dat = []
+        for g in library.items:
+            dat.append(g.ngdv)
+        dat = np.array(dat)
+        n = len(library.items)
+        D = np.zeros((n,n))
+        for i in range(n):
+            D[:,i] = np.linalg.norm(dat-dat[i],axis=1)
     for i, sig in enumerate(library.sigs):
-        particles = library.lookup[sig]
+        # include exact matches
+        particles = np.copy( library.lookup[sig].flatten() )
+        if thresh is not None:
+            # include all particles within a threshold radius
+            for j in np.argwhere(D[i,:]<thresh).flatten():
+                new_sig = library.sigs[j]
+                new_particles = library.lookup[new_sig].flatten()
+                particles = np.hstack((particles,new_particles))
+        particles = np.unique(particles)
         visited = np.zeros(len(particles))
         largest = 0
         while np.sum(visited) < len(particles):
@@ -84,11 +101,11 @@ def particleAdjacency(i, NL, n=1):
     return A
 
 class Network:
-    def __init__(self,snap):
+    def __init__(self,snap,k=5):
         A = np.zeros((snap.N,snap.N),np.int8)
         for i, nn in enumerate(snap.neighbors):
             A[i,nn] = 1
-        self.cpp = _crayon.neighborhood(A)
+        self.cpp = _crayon.neighborhood(A,k)
         self.gdv = self.cpp.gdv()
         # weight GDVs according to dependencies between orbits
         o = np.array([1, 2, 2, 2, 3, 4, 3, 3, 4, 3,
@@ -100,7 +117,7 @@ class Network:
                       8, 6, 6, 8, 7, 6, 7, 7, 8, 5,
                       6, 6, 4],dtype=np.float)
         w = 1. - o / 73.
-        self.ngdv = self.gdv * w
+        self.ngdv = self.gdv * w[:self.gdv.shape[1]]
         ones = np.ones(snap.N)
         sums = np.sum(self.ngdv,axis=1)
         norm = np.reshape(np.max(np.vstack((sums,ones)),axis=0),(-1,1))
@@ -174,6 +191,7 @@ class Voronoi(NeighborList):
     def filterNeighbors(self,nl_idx,snap_idx,neighbors,snap):
         # get neighbors from triangulation
         nn = np.array(neighbors[nl_idx],dtype=np.int)
+        n_voro = len(nn)
         # remove negative IDs (Voro++ indicating that a particle is its own neighbor)
         #    this line is problematic for type-specific operations
         nn[nn<0] = snap.N + nn[nn<0]
@@ -214,6 +232,7 @@ class Voronoi(NeighborList):
         Z = hierarchy.linkage(X,self.cluster_method)
         c = hierarchy.fcluster(Z,self.cluster_ratio*d_nbr[0],criterion='distance')
         h_base = np.argwhere(c == c[0]).flatten()
+        f_open = n_voro / float(len(h_base))
         return np.hstack((snap_idx,nn[h_base]))
     # compute Delaunay triangulation with Voro++ library
     def getNeighbors(self,snap):

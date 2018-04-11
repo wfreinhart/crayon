@@ -20,7 +20,7 @@
 
 #include <voro++/voro++.hh>
 
-#include "PyGraph.h"
+#include "Neighborhood.h"
 
 namespace crayon
 {

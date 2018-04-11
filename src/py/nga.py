@@ -46,7 +46,9 @@ class Snapshot:
         # default options for building libraries
         self.pattern_mode = False
         self.global_mode = False
+        self.graphlet_k = 5
         self.cluster = True
+        self.cluster_thresh = None
         self.n_shells = 1
         self.q_thresh = None
         # load from file
@@ -93,7 +95,7 @@ class Snapshot:
             self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
         if self.global_mode:
-            self.adjacency = neighborlist.Network(self)
+            self.adjacency = neighborlist.Network(self,k=self.graphlet_k)
         else:
             self.adjacency = _crayon.buildGraphs(self.neighbors,self.n_shells)
     def parseOptions(self,options):
@@ -103,9 +105,15 @@ class Snapshot:
         # use a global Network instead of local Neighborhoods?
         if 'global_mode' in options:
             self.global_mode = options['global_mode']
+        # choose size of graphlets
+        if 'graphlet_k' in options:
+            self.graphlet_k = options['graphlet_k']
         # perform clustering to find relevant structures?
         if 'cluster' in options:
             self.cluster = options['cluster']
+        # threshold radius to use in the clustering
+        if 'cluster_thresh' in options:
+            self.cluster_thresh = options['cluster_thresh']
         # number of neighbor shells to use (forced)
         if 'n_shells' in options:
             self.n_shells = options['n_shells']
@@ -124,9 +132,9 @@ class Snapshot:
             disordered = np.argwhere(q_range < self.q_thresh).flatten()
             for idx in disordered:
                 self.adjacency[idx] = np.ones((1,1))
-        self.graph_library.build(self.adjacency)
+        self.graph_library.build(self.adjacency,k=self.graphlet_k)
         if self.cluster:
-            self.graph_library.sizes = neighborlist.largest_clusters(self,self.graph_library)
+            self.graph_library.sizes = neighborlist.largest_clusters(self,self.graph_library,self.cluster_thresh)
         if self.pattern_mode:
             self.pattern_library = classifiers.PatternLibrary()
             self.map_graphs = self.mapTo(self.graph_library)
@@ -308,7 +316,11 @@ class Ensemble:
         # prepare task list
         if self.master:
             n = len(self.pattern_library.sigs)
-            m = len(self.lm_sigs)
+            try:
+                m = len(self.lm_sigs)
+            except:
+                m = n
+                self.lm_idx = np.arange(n)
             self.dists = np.zeros( (n,m) ) + np.Inf # designate null values with Inf
             for i in range(n):
                 for j in range(m):
@@ -335,7 +347,11 @@ class Ensemble:
         dat = np.array(dat)
         # perform distance calculation
         n = len(self.graph_library.sigs)
-        m = len(self.lm_sigs)
+        try:
+            m = len(self.lm_sigs)
+        except:
+            m = n
+            self.lm_idx = np.arange(n)
         self.dists = np.zeros((n,m))
         for i, lm in enumerate(self.lm_idx):
             self.dists[:,i] = np.linalg.norm(dat-dat[lm],axis=1)
@@ -437,3 +453,5 @@ class Ensemble:
                             valid_rows=self.valid_rows)
             print('Diffusion map construction complete')
             self.dmap.write()
+            np.savetxt('graph-counts.dat',self.graph_library.counts)
+            np.savetxt('graph-sizes.dat',self.graph_library.sizes)

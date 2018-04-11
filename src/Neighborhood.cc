@@ -1,37 +1,50 @@
 //
-// PyGraph.cc
+// Neighborhood.cc
 // wraps the libgraphlet/Orca calculation of GDVs and GDDs
 //
 // Copyright (c) 2018 Wesley Reinhart.
 // This file is part of the crayon project, released under the Modified BSD License.
 
-#include "PyGraph.h"
+#include "Neighborhood.h"
 
 namespace crayon
 {
 
-PyGraph::PyGraph()
+Neighborhood::Neighborhood()
     {
     }
 
-PyGraph::PyGraph(const Eigen::MatrixXi &A)
+Neighborhood::Neighborhood(const Eigen::MatrixXi &A)
     : A_(A)
     {
     buildFromAdj();
     setup();
     }
 
-PyGraph::PyGraph(const Graph &G)
+Neighborhood::Neighborhood(const Eigen::MatrixXi &A, const int k)
+    : A_(A), k_(k)
+    {
+    buildFromAdj();
+    setup();
+    }
+
+Neighborhood::Neighborhood(const Graph &G)
     : G_(G)
     {
     setup();
     }
 
-PyGraph::~PyGraph()
+Neighborhood::Neighborhood(const Graph &G, const int k)
+    : G_(G), k_(k)
+    {
+    setup();
+    }
+
+Neighborhood::~Neighborhood()
     {
     }
 
-void PyGraph::buildFromAdj()
+void Neighborhood::buildFromAdj()
     {
     // setup graph instance
     std::map<int,Graph::vertex_descriptor> map;
@@ -61,30 +74,30 @@ void PyGraph::buildFromAdj()
         }
     }
 
-void PyGraph::setup()
+void Neighborhood::setup()
     {
     // clean up graph and initialize orca object
     remove_edge_loops(G_);
     std::vector<std::pair<size_t,size_t>> edges;
     get_edges(G_, edges);
-    O_.reset(new orca::Orca(num_vertices(G_), edges, GRAPHLET_SIZE));
+    O_.reset(new orca::Orca(num_vertices(G_), edges, k_));
     O_->compute();
     }
 
-Eigen::MatrixXi PyGraph::getGDV()
+Eigen::MatrixXi Neighborhood::getGDV()
     {
     if( !computed_gdv_ ) computeGDV();
     return GDV_;
     }
 
-void PyGraph::computeGDV()
+void Neighborhood::computeGDV()
     {
     // compute gdv with orca and convert to numpy-readable vector
-    GDV_ = Eigen::MatrixXi::Zero(num_vertices(G_), orca::ORBITS[GRAPHLET_SIZE]);
+    GDV_ = Eigen::MatrixXi::Zero(num_vertices(G_), orca::ORBITS[k_]);
     const boost::numeric::ublas::matrix<int64_t> orbits = O_->getOrbits();
     for( unsigned int i = 0; i < num_vertices(G_); i++ )
         {
-        for( unsigned int j = 0; j < orca::ORBITS[GRAPHLET_SIZE]; j++ )
+        for( unsigned int j = 0; j < orca::ORBITS[k_]; j++ )
             {
             GDV_(i,j) = int(orbits(i,j));
             }
@@ -92,13 +105,13 @@ void PyGraph::computeGDV()
     computed_gdv_ = true;
     }
 
-Eigen::MatrixXi PyGraph::getGDD()
+Eigen::MatrixXi Neighborhood::getGDD()
     {
     if( !computed_gdd_ ) computeGDD();
     return GDD_;
     }
 
-void PyGraph::computeGDD()
+void Neighborhood::computeGDD()
     {
     // compute gdd
     libgraphlet::GDD gdd;
@@ -128,16 +141,18 @@ void PyGraph::computeGDD()
     computed_gdd_ = true;
     }
 
-void export_PyGraph(pybind11::module& m)
+void export_Neighborhood(pybind11::module& m)
     {
     pybind11::class_<Graph>(m,"graph")
         .def(pybind11::init<const unsigned int>());
-    pybind11::class_<PyGraph>(m,"neighborhood")
+    pybind11::class_<Neighborhood>(m,"neighborhood")
         .def(pybind11::init<const Eigen::MatrixXi &>())
+        .def(pybind11::init<const Eigen::MatrixXi &, const int>())
         .def(pybind11::init<const Graph &>())
-        .def("adj", &PyGraph::getAdj)
-        .def("gdv", &PyGraph::getGDV)
-        .def("gdd", &PyGraph::getGDD)
+        .def(pybind11::init<const Graph &, const int>())
+        .def("adj", &Neighborhood::getAdj)
+        .def("gdv", &Neighborhood::getGDV)
+        .def("gdd", &Neighborhood::getGDD)
     ;
     }
 

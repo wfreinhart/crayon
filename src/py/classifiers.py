@@ -45,17 +45,17 @@ class Graph(Classifier):
     Args:
         A (array-like): adjacency matrix defining the neighborhood graph
     """
-    def __init__(self,A):
+    def __init__(self,A,k=5):
         if type(A) == tuple:
             self.sgdv = A[0]
             self.ngdv = A[1]
         else:
-            self.build(A)
+            self.build(A,k)
         # build a hashable representation of the graph
         self.s = str(self.sgdv.tolist()).replace(' ','')
-    def build(self,A):
+    def build(self,A,k=5):
         # instantiate a Crayon::Graph object
-        self.cpp = _crayon.neighborhood(A)
+        self.cpp = _crayon.neighborhood(A,k)
         # retrieve adjacency matrix
         self.adj = self.cpp.adj()
         # compute its Graphlet Degree Vector
@@ -72,7 +72,7 @@ class Graph(Classifier):
                       8, 6, 6, 8, 7, 6, 7, 7, 8, 5,
                       6, 6, 4],dtype=np.float)
         w = 1. - o / 73.
-        self.ngdv = self.sgdv * w
+        self.ngdv = self.sgdv * w[:self.sgdv.shape[0]]
         self.ngdv = self.ngdv / max(float(np.sum(self.ngdv)),1.)
     def __sub__(self,other):
         R""" difference between this and another Graph, just the norm
@@ -174,10 +174,10 @@ class GraphLibrary(Library):
     Args:
         (None)
     """
-    def build(self,neighborhoods):
+    def build(self,neighborhoods,k=5):
         g_idx = np.zeros(len(neighborhoods),dtype=np.int)
         for i, nn in enumerate(neighborhoods):
-            G = Graph(nn)
+            G = Graph(nn,k)
             g_idx[i] = self.encounter(G)
         for i, sig in enumerate(self.sigs):
             if sig not in self.lookup:
