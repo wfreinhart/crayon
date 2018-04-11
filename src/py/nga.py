@@ -46,8 +46,7 @@ class Snapshot:
         # default options for building libraries
         self.pattern_mode = False
         self.cluster = True
-        self.shell_min = 0
-        self.shell_max = 0
+        self.n_shells = 1
         self.q_thresh = None
         # load from file
         if reader is None:
@@ -92,7 +91,7 @@ class Snapshot:
         else:
             self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
-        self.adjacency = _crayon.buildGraphs(self.neighbors,self.shell_min,self.shell_max)
+        self.adjacency = _crayon.buildGraphs(self.neighbors,self.n_shells)
     def parseOptions(self,options):
         # use multi-atom patterns?
         if 'pattern_mode' in options:
@@ -100,12 +99,9 @@ class Snapshot:
         # perform clustering to find relevant structures?
         if 'cluster' in options:
             self.cluster = options['cluster']
-        # threshold for expanding to second neighbor shell
-        if 'shell_min' in options:
-            self.shell_min = options['shell_min']
-        # threshold for pruning back to first neighbor shell
-        if 'shell_max' in options:
-            self.shell_max = options['shell_max']
+        # number of neighbor shells to use (forced)
+        if 'n_shells' in options:
+            self.n_shells = options['n_shells']
         # threshold for spherical harmonics
         if 'q_thresh' in options:
             self.q_thresh = options['q_thresh']
