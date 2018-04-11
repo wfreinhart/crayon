@@ -45,6 +45,7 @@ class Snapshot:
         self.pattern_library = None
         # default options for building libraries
         self.pattern_mode = False
+        self.global_mode = False
         self.cluster = True
         self.n_shells = 1
         self.q_thresh = None
@@ -91,11 +92,17 @@ class Snapshot:
         else:
             self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
-        self.adjacency = _crayon.buildGraphs(self.neighbors,self.n_shells)
+        if self.global_mode:
+            self.adjacency = neighborlist.Network(self)
+        else:
+            self.adjacency = _crayon.buildGraphs(self.neighbors,self.n_shells)
     def parseOptions(self,options):
-        # use multi-atom patterns?
+        # use multi-atom Patterns?
         if 'pattern_mode' in options:
             self.pattern_mode = options['pattern_mode']
+        # use a global Network instead of local Neighborhoods?
+        if 'global_mode' in options:
+            self.global_mode = options['global_mode']
         # perform clustering to find relevant structures?
         if 'cluster' in options:
             self.cluster = options['cluster']

@@ -32,7 +32,7 @@ class Classifier:
         R""" inequality comparison between this and another Classifier,
              simply checks if A - B > 0
         """
-        return (self - other > 0.)
+        return not self == other
     def __str__(self):
         R""" hashable representation of the Classifier, as specified
              by the constructor
@@ -46,12 +46,20 @@ class Graph(Classifier):
         A (array-like): adjacency matrix defining the neighborhood graph
     """
     def __init__(self,A):
+        if type(A) == tuple:
+            self.sgdv = A[0]
+            self.ngdv = A[1]
+        else:
+            self.build(A)
+        # build a hashable representation of the graph
+        self.s = str(self.sgdv.tolist()).replace(' ','')
+    def build(self,A):
         # instantiate a Crayon::Graph object
-        self.C = _crayon.neighborhood(A)
+        self.cpp = _crayon.neighborhood(A)
         # retrieve adjacency matrix
-        self.adj = self.C.adj()
+        self.adj = self.cpp.adj()
         # compute its Graphlet Degree Vector
-        self.gdv = self.C.gdv()
+        self.gdv = self.cpp.gdv()
         # convert node-wise to graph-wise graphlet frequencies
         self.sgdv = np.sum(self.gdv,axis=0)
         # weight GDV according to dependencies between orbits
@@ -66,10 +74,6 @@ class Graph(Classifier):
         w = 1. - o / 73.
         self.ngdv = self.sgdv * w
         self.ngdv = self.ngdv / max(float(np.sum(self.ngdv)),1.)
-        # build a hashable representation of the graph
-        s_nodes = str(len(self.gdv))
-        s_gdv = str(self.sgdv.tolist()).replace(' ','')
-        self.s = '%s:%s'%(s_nodes,s_gdv)
     def __sub__(self,other):
         R""" difference between this and another Graph, just the norm
         between graph-wide Graphlet Degree Vectors
