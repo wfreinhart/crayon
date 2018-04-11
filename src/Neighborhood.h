@@ -1,12 +1,12 @@
 //
-// PyGraph.h
+// Neighborhood.h
 // wraps the libgraphlet/Orca calculation of GDVs and GDDs
 //
 // Copyright (c) 2018 Wesley Reinhart.
 // This file is part of the crayon project, released under the Modified BSD License.
 
-#ifndef SRC_PY_GRAPH_H_
-#define SRC_PY_GRAPH_H_
+#ifndef SRC_NEIGHBORHOOD_H_
+#define SRC_NEIGHBORHOOD_H_
 
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
@@ -22,20 +22,26 @@
 
 #include <libgraphlet/GDD.hpp>
 
-#define GRAPHLET_SIZE 5
-
 namespace crayon
     {
 
-    class PyGraph
+    class Neighborhood
         {
         public:
-        PyGraph(const Eigen::MatrixXi &A); // constructor
-        ~PyGraph(); // destructor
+        Neighborhood(); // empty constructor
+        Neighborhood(const Eigen::MatrixXi &A); // construct from numpy adjacency matrix
+        Neighborhood(const Eigen::MatrixXi &A, const int k);
+        Neighborhood(const Graph &G); // construct from Graph object
+        Neighborhood(const Graph &G, const int k);
+        ~Neighborhood(); // destructor
 
-        void build();
+        void setGraph(const Graph &G) { G_ = G; }
+
+        void buildFromAdj();
+        void setup();
 
         const Eigen::MatrixXi getAdj() const { return A_; }
+        const int getK() const { return k_; }
 
         Eigen::MatrixXi getGDV();
         void computeGDV();
@@ -47,6 +53,7 @@ namespace crayon
         // core data structures
         Eigen::MatrixXi A_;
         Graph G_;
+        int k_ = 5;
         std::unique_ptr<orca::Orca> O_;
         // orca results
         Eigen::MatrixXi GDV_;
@@ -55,7 +62,7 @@ namespace crayon
         bool computed_gdd_ = false;
         };
 
-    void export_PyGraph(pybind11::module& m);
+    void export_Neighborhood(pybind11::module& m);
 
     } // end namespace crayon
 

@@ -13,13 +13,13 @@
 
 #include <Eigen/Core>
 
-#include "PyGraph.h"
+#include "Neighborhood.h"
 
 namespace crayon
 {
 
-Eigen::MatrixXd GDVSimilarity(PyGraph &A, PyGraph &B);
-Eigen::VectorXd GDDAgreement(PyGraph &A, PyGraph &B);
+Eigen::MatrixXd GDVSimilarity(Neighborhood &A, Neighborhood &B);
+Eigen::VectorXd GDDAgreement(Neighborhood &A, Neighborhood &B);
 
 void export_Comparison(pybind11::module& m);
 

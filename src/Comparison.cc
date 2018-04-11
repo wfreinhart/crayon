@@ -21,11 +21,11 @@ const double AFFECTED[73] = {
 		8., 6., 6., 8., 7., 6., 7., 7., 8., 5.,
 		6., 6., 4.};
 
-Eigen::MatrixXd GDVSimilarity(PyGraph &A, PyGraph &B)
+Eigen::MatrixXd GDVSimilarity(Neighborhood &A, Neighborhood &B)
     {
     // generate weights for GDV comparison
     // from libgraphlet/Similarity.cpp
-    const unsigned int n = orca::ORBITS[GRAPHLET_SIZE];
+    const unsigned int n = orca::ORBITS[A.getK()];
     std::vector<double> w(n);
     for(unsigned int k = 0; k < n; ++k)
         {
@@ -57,9 +57,9 @@ Eigen::MatrixXd GDVSimilarity(PyGraph &A, PyGraph &B)
     return S;
     }
 
-Eigen::VectorXd GDDAgreement(PyGraph &A, PyGraph &B)
+Eigen::VectorXd GDDAgreement(Neighborhood &A, Neighborhood &B)
     {
-    const unsigned int n = orca::ORBITS[GRAPHLET_SIZE];
+    const unsigned int n = orca::ORBITS[A.getK()];
     // fetch the GDDs from the graph objects
     Eigen::MatrixXi A_gdd = A.getGDD();
     Eigen::MatrixXi B_gdd = B.getGDD();

@@ -32,7 +32,7 @@ class Classifier:
         R""" inequality comparison between this and another Classifier,
              simply checks if A - B > 0
         """
-        return (self - other > 0.)
+        return not self == other
     def __str__(self):
         R""" hashable representation of the Classifier, as specified
              by the constructor
@@ -45,21 +45,35 @@ class Graph(Classifier):
     Args:
         A (array-like): adjacency matrix defining the neighborhood graph
     """
-    def __init__(self,A):
-        # instantiate a Crayon::Graph object
-        self.C = _crayon.graph(A)
-        self.adj = self.C.adj()
-        # compute its Graphlet Degree Distribution
-        self.gdd = self.C.gdd()
-        # compute its Graphlet Degree Vector
-        self.gdv = self.C.gdv()
-        # convert node-wise to graph-wise graphlet frequencies
-        self.ngdv = np.sum(self.gdv,0) / max(float(np.sum(self.gdv)),1.)
+    def __init__(self,A,k=5):
+        if type(A) == tuple:
+            self.sgdv = A[0]
+            self.ngdv = A[1]
+        else:
+            self.build(A,k)
         # build a hashable representation of the graph
-        s_nodes = str(len(self.adj))
-        s_edges = str(np.sum(self.adj))
-        s_gdv = str(np.sum(self.gdv,0).tolist()).replace(' ','')
-        self.s = '%s:%s:%s'%(s_nodes,s_edges,s_gdv)
+        self.s = str(self.sgdv.tolist()).replace(' ','')
+    def build(self,A,k=5):
+        # instantiate a Crayon::Graph object
+        self.cpp = _crayon.neighborhood(A,k)
+        # retrieve adjacency matrix
+        self.adj = self.cpp.adj()
+        # compute its Graphlet Degree Vector
+        self.gdv = self.cpp.gdv()
+        # convert node-wise to graph-wise graphlet frequencies
+        self.sgdv = np.sum(self.gdv,axis=0)
+        # weight GDV according to dependencies between orbits
+        o = np.array([1, 2, 2, 2, 3, 4, 3, 3, 4, 3,
+                      4, 4, 4, 4, 3, 4, 6, 5, 4, 5,
+                      6, 6, 4, 4, 4, 5, 7, 4, 6, 6,
+                      7, 4, 6, 6, 6, 5, 6, 7, 7, 5,
+                      7, 6, 7, 6, 5, 5, 6, 8, 7, 6,
+                      6, 8, 6, 9, 5, 6, 4, 6, 6, 7,
+                      8, 6, 6, 8, 7, 6, 7, 7, 8, 5,
+                      6, 6, 4],dtype=np.float)
+        w = 1. - o / 73.
+        self.ngdv = self.sgdv * w[:self.sgdv.shape[0]]
+        self.ngdv = self.ngdv / max(float(np.sum(self.ngdv)),1.)
     def __sub__(self,other):
         R""" difference between this and another Graph, just the norm
         between graph-wide Graphlet Degree Vectors
@@ -160,10 +174,10 @@ class GraphLibrary(Library):
     Args:
         (None)
     """
-    def build(self,neighborhoods):
+    def build(self,neighborhoods,k=5):
         g_idx = np.zeros(len(neighborhoods),dtype=np.int)
         for i, nn in enumerate(neighborhoods):
-            G = Graph(nn)
+            G = Graph(nn,k)
             g_idx[i] = self.encounter(G)
         for i, sig in enumerate(self.sigs):
             if sig not in self.lookup:

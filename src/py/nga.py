@@ -8,6 +8,7 @@
 
 from __future__ import print_function
 
+from crayon import _crayon
 from crayon import bondorder
 from crayon import classifiers
 from crayon import parallel
@@ -36,13 +37,20 @@ class Snapshot:
         nl (crayon::Neighborlist): a neighborlist generation class
         pbc (str) (optional): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz',pattern_mode=False):
+    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz'):
         # initialize class member variables
         self.neighbors = None
         self.adjacency = None
         self.graph_library = None
-        self.pattern_mode = pattern_mode
         self.pattern_library = None
+        # default options for building libraries
+        self.pattern_mode = False
+        self.global_mode = False
+        self.graphlet_k = 5
+        self.cluster = True
+        self.cluster_thresh = None
+        self.n_shells = 1
+        self.q_thresh = None
         # load from file
         if reader is None:
             filename = reader_input
@@ -86,21 +94,47 @@ class Snapshot:
         else:
             self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
-        self.adjacency = self.nl.getAdjacency(self)
-    def buildLibrary(self,q_thresh=None,cluster=False):
+        if self.global_mode:
+            self.adjacency = neighborlist.Network(self,k=self.graphlet_k)
+        else:
+            self.adjacency = _crayon.buildGraphs(self.neighbors,self.n_shells)
+    def parseOptions(self,options):
+        # use multi-atom Patterns?
+        if 'pattern_mode' in options:
+            self.pattern_mode = options['pattern_mode']
+        # use a global Network instead of local Neighborhoods?
+        if 'global_mode' in options:
+            self.global_mode = options['global_mode']
+        # choose size of graphlets
+        if 'graphlet_k' in options:
+            self.graphlet_k = options['graphlet_k']
+        # perform clustering to find relevant structures?
+        if 'cluster' in options:
+            self.cluster = options['cluster']
+        # threshold radius to use in the clustering
+        if 'cluster_thresh' in options:
+            self.cluster_thresh = options['cluster_thresh']
+        # number of neighbor shells to use (forced)
+        if 'n_shells' in options:
+            self.n_shells = options['n_shells']
+        # threshold for spherical harmonics
+        if 'q_thresh' in options:
+            self.q_thresh = options['q_thresh']
+    def buildLibrary(self,**kwargs):
+        self.parseOptions(kwargs)
         self.graph_library = classifiers.GraphLibrary()
         if self.adjacency is None:
             if self.neighbors is None:
                 self.buildNeighborhoods()
             self.buildAdjacency()
-        if q_thresh is not None:
+        if self.q_thresh is not None:
             q_range = bondorder.computeQRange(self)
-            disordered = np.argwhere(q_range < q_thresh).flatten()
+            disordered = np.argwhere(q_range < self.q_thresh).flatten()
             for idx in disordered:
                 self.adjacency[idx] = np.ones((1,1))
-        self.graph_library.build(self.adjacency)
-        if cluster:
-            self.graph_library.sizes = neighborlist.largest_clusters(self,self.graph_library)
+        self.graph_library.build(self.adjacency,k=self.graphlet_k)
+        if self.cluster:
+            self.graph_library.sizes = neighborlist.largest_clusters(self,self.graph_library,self.cluster_thresh)
         if self.pattern_mode:
             self.pattern_library = classifiers.PatternLibrary()
             self.map_graphs = self.mapTo(self.graph_library)
@@ -123,12 +157,10 @@ class Snapshot:
         pbc = np.asarray([dim in self.pbc for dim in 'xyz'],dtype=np.float)
         w = v - self.L * np.round( v / self.L * pbc)
         return w
-    def save(self,filename,neighbors=False,adjacency=False,library=False):
+    def save(self,filename,neighbors=False,library=False):
         buff = {}
         if neighbors:
             buff['neighbors'] = self.neighbors
-        if adjacency:
-            buff['adjacency'] = self.adjacency
         if library:
             buff['graph_library'] = self.graph_library
             buff['pattern_library'] = self.pattern_library
@@ -140,29 +172,31 @@ class Snapshot:
         if 'neighbors' in buff:
             self.neighbors = buff['neighbors']
             self.N = len(self.neighbors)
-        if 'adjacency' in buff:
-            self.adjacency = buff['adjacency']
-            self.N = len(self.adjacency)
         if 'graph_library' in buff:
             self.graph_library = buff['graph_library']
         if 'pattern_library' in buff:
             self.pattern_library = buff['pattern_library']
 
 class Ensemble:
-    def __init__(self,pattern_mode=False,q_thresh=None,cluster=False):
+    def __init__(self,**kwargs):
+        # evaluate optoins
+        self.options = kwargs
+        if 'pattern_mode' in self.options:
+            self.pattern_mode = self.options['pattern_mode']
+        else:
+            self.pattern_mode = False
+        # set default values
         self.filenames = []
-        self.q_thresh = q_thresh
-        self.cluster = cluster
         self.graph_library = classifiers.GraphLibrary()
         self.graph_lookups = {}
         self.graphs = []
-        self.pattern_mode = pattern_mode
         self.pattern_library = classifiers.PatternLibrary()
         self.pattern_lookups = {}
         self.patterns = []
         self.dists = None
         self.valid_cols = None
         self.valid_rows = None
+        self.invalid_rows = np.array([])
         self.dmap = dmap.DMap()
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
@@ -175,9 +209,9 @@ class Ensemble:
             filename = self.filenames[f]
             print('rank %d of %d will process %s'%(self.rank,self.size,filename))
             # create snapshot instance and build neighborhoods
-            snap = Snapshot(filename,pbc='xyz',nl=nl,pattern_mode=self.pattern_mode)
+            snap = Snapshot(filename,pbc='xyz',nl=nl)
             self.insert(f,snap)
-            snap.save(filename + '.nga',adjacency=True,neighbors=True)
+            snap.save(filename + '.nga',neighbors=True)
         if self.pattern_mode:
             print('rank %d tasks complete, found %d unique graphs and %d unique patterns'%(self.rank,len(self.graph_library.items),len(self.pattern_library.items)))
         else:
@@ -185,7 +219,7 @@ class Ensemble:
         self.collect()
     def insert(self,idx,snap):
         if snap.graph_library is None:
-            snap.buildLibrary(q_thresh=self.q_thresh,cluster=self.cluster)
+            snap.buildLibrary(**self.options)
         self.graph_library.collect(snap.graph_library)
         self.graph_lookups[idx] = snap.graph_library.lookup
         if self.pattern_mode:
@@ -278,34 +312,58 @@ class Ensemble:
                 frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
             frame_maps.append(frame_data)
         return c, c_map, frame_maps
-    def computeDists(self,outlier_mode=None,outlier_thresh=None):
-        # use a master-slave paradigm for load balancing
-        task_list = []
-        if self.pattern_mode:
-            library = self.pattern_library
-        else:
-            library = self.graph_library
+    def computePatternDists(self):
+        # prepare task list
         if self.master:
-            n = len(library.sigs)
-            m = len(self.lm_sigs)
+            n = len(self.pattern_library.sigs)
+            try:
+                m = len(self.lm_sigs)
+            except:
+                m = n
+                self.lm_idx = np.arange(n)
             self.dists = np.zeros( (n,m) ) + np.Inf # designate null values with Inf
             for i in range(n):
                 for j in range(m):
                     task_list.append( (i,self.lm_idx[j]) )
         # perform graph matching in parallel using MPI
-        items = self.p.shareData(library.items)
+        items = self.p.shareData(self.pattern_library.items)
         eval_func = lambda task, data: data[task[0]] - data[task[1]]
         result_list = self.p.computeQueue(function=eval_func,
                                           tasks=task_list,
                                           reports=10)
+        # convert results into numpy array
         if self.master:
-            # convert results into numpy array
             for k, d in enumerate(result_list):
                 i, j = task_list[k]
                 jid = np.argwhere(self.lm_idx == j)[0]
                 self.dists[i,jid] = d
+    def computeGraphDists(self):
+        if not self.master:
+            return
+        # prepare NGDVs for distance calculation
+        dat = []
+        for g in self.graph_library.items:
+            dat.append(g.ngdv)
+        dat = np.array(dat)
+        # perform distance calculation
+        n = len(self.graph_library.sigs)
+        try:
+            m = len(self.lm_sigs)
+        except:
+            m = n
+            self.lm_idx = np.arange(n)
+        self.dists = np.zeros((n,m))
+        for i, lm in enumerate(self.lm_idx):
+            self.dists[:,i] = np.linalg.norm(dat-dat[lm],axis=1)
+    def computeDists(self):
+        if self.pattern_mode:
+            self.computePatternDists()
+        else:
+            self.computeGraphDists()
+    def detectDistOutliers(self,mode=None,thresh=None):
+        if self.master:
             # detect outliers, if requested
-            if outlier_mode == 'agglomerative':
+            if mode == 'agglomerative':
                 # filter outliers such as vapor particles
                 # first find bad landmarks
                 d = np.sum(self.dists,axis=0)
@@ -327,10 +385,12 @@ class Ensemble:
                 c_med = [np.median(d[c==i]) for i in np.unique(c)]
                 c_best = int(np.unique(c)[np.argwhere(c_med == np.min(c_med))])
                 self.valid_rows = np.argwhere(c == c_best).flatten()
-            elif outlier_mode == 'cutoff':
+                self.invalid_rows = np.argwhere(c != c_best).flatten()
+            elif mode == 'cutoff':
                 self.valid_cols = np.arange(self.dists.shape[1])
                 d = np.min(self.dists,axis=1)
-                self.valid_rows = np.argwhere(d < outlier_thresh).flatten()
+                self.valid_rows = np.argwhere(d < thresh).flatten()
+                self.invalid_rows = np.argwhere(d >= thresh).flatten()
     def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
         coms = None
         if self.master:
@@ -339,7 +399,8 @@ class Ensemble:
         coms = self.p.shareData(coms)
         self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito,similarity=similarity)
     def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,
-                      VMD=False,Ovito=False,similarity=True):
+                      VMD=False,Ovito=False,similarity=True,
+                      rotation=None):
         # enforce list-of-lists style triplets
         if type(trips[0]) == int:
             trips = [trips]
@@ -370,6 +431,8 @@ class Ensemble:
                 else:
                     sim = color_coords[frame_maps[t][f].reshape(-1,1),np.array(trip)]
                 mapped_color = color_maps[t][frame_maps[t][f]].reshape(-1,1)
+                for inv in self.invalid_rows:
+                    mapped_color[mapped_color==inv] = -1
                 f_dat = np.hstack((mapped_color,sim))
                 np.savetxt(filename + '_%d%d%d.cmap'%trip, f_dat)
         if not self.master:
@@ -377,8 +440,11 @@ class Ensemble:
         # write visualization scripts
         for t, trip in enumerate(trips):
             if VMD:
+                trip_colors = colors[t]
+                if rotation is not None:
+                    trip_colors = color.rotate(trip_colors,rotation[0],rotation[1])
                 color.writeVMD('%s_%d%d%d.tcl'%(prefix,trip[0],trip[1],trip[2]),
-                               self.filenames, colors[t], trip, f_dat.shape[1], sigma=sigma,
+                               self.filenames, trip_colors, trip, f_dat.shape[1], sigma=sigma,
                                swap=('/home/wfr/','/Users/wfr/mountpoint/'))
     def buildDMap(self):
         if self.master:
@@ -387,3 +453,6 @@ class Ensemble:
                             valid_rows=self.valid_rows)
             print('Diffusion map construction complete')
             self.dmap.write()
+            np.savetxt('graph-counts.dat',self.graph_library.counts)
+            np.savetxt('graph-sizes.dat',self.graph_library.sizes)
+            np.savetxt('graph-landmarks.dat',self.lm_idx)
