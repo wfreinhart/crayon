@@ -53,10 +53,22 @@ class Graph(Classifier):
         # compute its Graphlet Degree Vector
         self.gdv = self.C.gdv()
         # convert node-wise to graph-wise graphlet frequencies
-        self.ngdv = np.sum(self.gdv,0) / max(float(np.sum(self.gdv)),1.)
+        self.sgdv = np.sum(self.gdv,axis=0)
+        # weight GDV according to dependencies between orbits
+        o = np.array([1, 2, 2, 2, 3, 4, 3, 3, 4, 3,
+                      4, 4, 4, 4, 3, 4, 6, 5, 4, 5,
+                      6, 6, 4, 4, 4, 5, 7, 4, 6, 6,
+                      7, 4, 6, 6, 6, 5, 6, 7, 7, 5,
+                      7, 6, 7, 6, 5, 5, 6, 8, 7, 6,
+                      6, 8, 6, 9, 5, 6, 4, 6, 6, 7,
+                      8, 6, 6, 8, 7, 6, 7, 7, 8, 5,
+                      6, 6, 4],dtype=np.float)
+        w = 1. - o / 73.
+        self.ngdv = self.sgdv * w
+        self.ngdv = self.ngdv / max(float(np.sum(self.ngdv)),1.)
         # build a hashable representation of the graph
         s_nodes = str(len(self.gdv))
-        s_gdv = str(np.sum(self.gdv,0).tolist()).replace(' ','')
+        s_gdv = str(self.sgdv.tolist()).replace(' ','')
         self.s = '%s:%s'%(s_nodes,s_gdv)
     def __sub__(self,other):
         R""" difference between this and another Graph, just the norm
