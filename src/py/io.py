@@ -111,3 +111,31 @@ def readListParallel(filename):
         filenames = [x for x in filenames if x[0] != '#']
     filenames = p.shareData(filenames)
     return filenames
+
+def saveXML(filename,snap,bonds=False):
+    fid = open(filename,'w+')
+    print('<?xml version="1.0" encoding="UTF-8"?>',file=fid)
+    print('<hoomd_xml version="1.7">',file=fid)
+    print('<configuration time_step="0" dimensions="3" natoms="%d" >'%snap.N,file=fid)
+    print('<box lx="%.6f" ly="%.6f" lz="%.6f" xy="0" xz="0" yz="0"/>'%tuple(snap.L),file=fid)
+    print('<position num="%d">'%snap.N,file=fid)
+    for i in range(snap.N):
+        print('%.6f %.6f %.6f'%tuple(snap.xyz[i]),file=fid)
+    print('</position>',file=fid)
+    if bonds:
+        bonds = []
+        for i in range(snap.N):
+            for j in snap.neighbors[i]:
+                if i == j:
+                    continue
+                vec = snap.xyz[i] - snap.xyz[j]
+                if np.all(vec == snap.wrap(vec)):
+                    bonds.append( (i,j) )
+        nb = len(bonds)
+        print('<bond num="%d">'%nb,file=fid)
+        for bond in bonds:
+            print('backbone %d %d'%bond,file=fid)
+        print('</bond>',file=fid)
+    print('</configuration>',file=fid)
+    print('</hoomd_xml>',file=fid)
+    fid.close()

@@ -55,7 +55,7 @@ def rotate(coords,axis,turns):
     t = 0.5*np.ones(3)
     return t+np.matmul(coords-t,R[axis])
 
-def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='add',suffix=''):
+def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,mode='add',bonds=False):
     # create a VMD draw script
     fid = open(filename,'w')
     cmds = ['axes location off',
@@ -77,20 +77,27 @@ def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='ad
         c += 1
     prev = 'None'
     for f, frame in enumerate(snapshots):
-        xml_prefix = frame.replace(swap[0],swap[1])
-        frame_run = frame.split('.')[0]
+        frame_run = ''.join(frame.split('.')[:-1])
+        suffix = frame.split('.')[-1]
+        if bonds:
+            filetype = frame[::-1].find('.')
+            frame_name = frame[:-filetype] + 'bonds.xml'
+            vdw_scale = 0.4
+        else:
+            frame_name = frame_run
+            vdw_scale = 1.0
         if frame_run != prev or mode == "new":
-            if '.xml' in xml_prefix:
+            if '.xml' in frame_name:
                 on_load = 'type hoomd'
             else:
                 on_load = ''
-            print('mol new %s %s'%(xml_prefix,on_load),file=fid)
+            print('mol new %s %s'%(frame_name,on_load),file=fid)
             newFrame = True
         else:
-            print('mol addfile %s %s'%(xml_prefix,on_load),file=fid)
+            print('mol addfile %s %s'%(frame_name,on_load),file=fid)
             newFrame = False
         cmds = ['[atomselect top "all"] set radius %f'%(0.50*sigma),
-                'set fid [open "%s'%xml_prefix + '_%d%d%d'%com + '%s.cmap"]'%suffix,
+                'set fid [open "%s'%frame + '_%d%d%d'%com + '.cmap"]',
                 'set file_data [read $fid]',
                 'close $fid',
                 'set sel [atomselect top "all"]',
@@ -106,14 +113,14 @@ def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='ad
             print(cmd,file=fid)
         if newFrame:
             cmds = ['mol rename top %s'%frame_run.split('/')[-1],
-                    'mol modstyle 0 top vdw 1.0 25',
+                    'mol modstyle 0 top VDW %f 12'%vdw_scale,
                     'mol modmaterial 0 top "AOChalky"',
-                    'mol modselect 0 top "all"',
+                    'mol modselect 0 top "user < 0"',
                     'mol modcolor 0 top ColorID 6',
                     'mol selupdate 0 top 1',
                     'mol colupdate 0 top 1',
                     'mol addrep top',
-                    'mol modstyle 1 top vdw 1.0 25',
+                    'mol modstyle 1 top VDW %f 12'%vdw_scale,
                     'mol modmaterial 1 top "AOChalky"',
                     'mol modselect 1 top "user >= 0"',
                     'mol modcolor 1 top user',
@@ -121,6 +128,17 @@ def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,swap=('',''),mode='ad
                     'mol selupdate 1 top 1',
                     'mol colupdate 1 top 1',
                     'mol off top']
+            if bonds:
+                cmds.pop()
+                cmds += ['mol addrep top',
+                         'mol modstyle 2 top Bonds 0.06 4',
+                         'mol modmaterial 2 top "AOChalky"',
+                         'mol modselect 2 top "user >= 0"',
+                         'mol modcolor 2 top user',
+                         'mol scaleminmax top 2 0 1023',
+                         'mol selupdate 2 top 1',
+                         'mol colupdate 2 top 1',
+                         'mol off top']
             for cmd in cmds:
                 print(cmd,file=fid)
         prev = frame_run

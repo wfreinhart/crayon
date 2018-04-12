@@ -400,7 +400,7 @@ class Ensemble:
         self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito,similarity=similarity)
     def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,
                       VMD=False,Ovito=False,similarity=True,
-                      rotation=None):
+                      bonds=False,rotation=None):
         # enforce list-of-lists style triplets
         if type(trips[0]) == int:
             trips = [trips]
@@ -424,7 +424,14 @@ class Ensemble:
         local_file_idx  = parallel.partition(range(len(self.filenames)))
         for f in local_file_idx:
             filename = self.filenames[f]
-            snap = Snapshot(filename + '.nga')
+            if bonds:
+                nl = neighborlist.NeighborList()
+                snap = Snapshot(filename,nl=nl)
+                snap.load(filename + '.nga')
+                filetype = filename[::-1].find('.')
+                io.saveXML(filename[:-filetype] + 'bonds.xml',snap,bonds=bonds)
+            else:
+                snap = Snapshot(filename + '.nga')
             for t, trip in enumerate(trips):
                 if similarity:
                     sim = color.neighborSimilarity(frame_maps[t][f],snap.neighbors,color_coords[:,np.array(trip)])
@@ -445,7 +452,7 @@ class Ensemble:
                     trip_colors = color.rotate(trip_colors,rotation[0],rotation[1])
                 color.writeVMD('%s_%d%d%d.tcl'%(prefix,trip[0],trip[1],trip[2]),
                                self.filenames, trip_colors, trip, f_dat.shape[1], sigma=sigma,
-                               swap=('/home/wfr/','/Users/wfr/mountpoint/'))
+                               bonds=bonds)
     def buildDMap(self):
         if self.master:
             self.dmap.build(self.dists,landmarks=self.lm_idx,
