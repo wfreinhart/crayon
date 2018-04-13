@@ -69,9 +69,10 @@ class AnalyzerFreud:
         dmed = np.median(d)
         dmad = np.median(np.abs(d-dmed))
         return dmed, dmad
-    def compute(self,snap):
-        dmed, dmad = self.guessLocality(snap)
-        dmax = dmed + 3. * dmad
+    def compute(self,snap,dmax=None):
+        if dmax is None:
+            dmed, dmad = self.guessLocality(snap)
+            dmax = dmed + 3. * dmad
         is2D = 'z' not in snap.pbc
         box = freud.box.Box(Lx=snap.L[0],Ly=snap.L[1],Lz=snap.L[2],is2D=is2D)
         results = np.zeros((snap.N,len(self.quantities))) * np.nan
