@@ -112,7 +112,15 @@ def readListParallel(filename):
     filenames = p.shareData(filenames)
     return filenames
 
-def saveXML(filename,snap,bonds=False):
+def writeXYZ(filename,snap):
+    fid = open(filename,'w+')
+    print('%d'%snap.N,file=fid)
+    print('Lattice="%.6f 0.0 0.0 0.0 %.6f 0.0 0.0 0.0 %.6f"'%tuple(snap.L),file=fid)
+    for i in range(snap.N):
+        print('C %.6f %.6f %.6f'%tuple(snap.xyz[i]),file=fid)
+    fid.close()
+
+def writeXML(filename,snap,bonds=False):
     fid = open(filename,'w+')
     print('<?xml version="1.0" encoding="UTF-8"?>',file=fid)
     print('<hoomd_xml version="1.7">',file=fid)

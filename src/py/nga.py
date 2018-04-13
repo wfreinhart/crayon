@@ -429,7 +429,7 @@ class Ensemble:
                 snap = Snapshot(filename,nl=nl)
                 snap.load(filename + '.nga')
                 filetype = filename[::-1].find('.')
-                io.saveXML(filename[:-filetype] + 'bonds.xml',snap,bonds=bonds)
+                io.writeXML(filename[:-filetype] + 'bonds.xml',snap,bonds=bonds)
             else:
                 snap = Snapshot(filename + '.nga')
             for t, trip in enumerate(trips):
