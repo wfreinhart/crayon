@@ -66,7 +66,16 @@ class DMap:
         evecs_ny[valid_rows,:] = np.array(self.evecs_ny)
         self.evecs_ny = evecs_ny
         # construct uniformly coordinates for mapping to RGB space
-        self.transform()
+        if self.evecs_ny is None:
+            R = self.evecs
+        else:
+            R = self.evecs_ny
+        self.color_coords = color.rankOrderTransform(R)
+        # first eigenvector is always trivial
+        self.color_coords[:,0] = 0.5
+        # catch nan rows
+        nan_idx = np.argwhere(np.isnan(self.color_coords[:,-1])).flatten()
+        self.color_coords[nan_idx,:] = 1.
     def write(self,prefix='',binary=False):
         if binary:
             buff = {'evals': self.evals,
@@ -82,25 +91,6 @@ class DMap:
                 np.savetxt('%sevecs-ny.dat'%prefix,self.evecs_ny)
             if self.color_coords is not None:
                 np.savetxt('%scolor-coords.dat'%prefix,self.color_coords)
-    def transform(self,prefix=''):
-        # transform data to uniform distribution
-        if self.evecs_ny is None:
-            R = self.evecs
-        else:
-            R = self.evecs_ny
-        self.color_coords = np.zeros(R.shape)*np.nan
-        # first eigenvector is always trivial
-        self.color_coords[:,0] = 0.5
-        # transform each remaining eigenvector to yield a uniform distribution
-        for i in range(1,R.shape[1]):
-            r = R[:,i]
-            x = np.linspace(np.nanmin(r),np.nanmax(r),
-                            np.round(np.sqrt(len(r[r==r]))))
-            hy, hx = np.histogram(r[r==r], bins=x, normed=True)
-            c = np.cumsum(hy) / np.sum(hy)
-            self.color_coords[:,i] = np.interp(r,0.5*(x[:-1]+x[1:]),c)
-        nan_idx = np.argwhere(np.isnan(self.color_coords[:,-1])).flatten()
-        self.color_coords[nan_idx,:] = 1.
     def uncorrelatedTriplets(self):
         # first determine least correlated eigenvectors
         X = np.abs( np.corrcoef(np.transpose(self.color_coords[:,1:])) )

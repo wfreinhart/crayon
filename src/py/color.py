@@ -55,6 +55,19 @@ def rotate(coords,axis,turns):
     t = 0.5*np.ones(3)
     return t+np.matmul(coords-t,R[axis])
 
+def rankOrderTransform(R):
+    # transform data to uniform distribution
+    coords = np.zeros(R.shape)*np.nan
+    # transform each remaining eigenvector to yield a uniform distribution
+    for i in range(R.shape[1]):
+        r = R[:,i]
+        s = np.unique(r[r==r])
+        x = np.linspace(0.,1.,len(s))
+        coords[:,i] = np.interp(r,s,x)
+    nan_idx = np.argwhere(np.isnan(coords[:,-1])).flatten()
+    coords[nan_idx,:] = 1.
+    return coords
+
 def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,mode='add',bonds=False):
     # create a VMD draw script
     fid = open(filename,'w')
