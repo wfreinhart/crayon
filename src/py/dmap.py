@@ -11,6 +11,7 @@ import pickle
 import numpy as np
 
 from crayon import parallel
+from crayon import color
 
 try:
     import PyDMap
