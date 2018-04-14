@@ -450,9 +450,10 @@ class Ensemble:
                 trip_colors = colors[t]
                 if rotation is not None:
                     trip_colors = color.rotate(trip_colors,rotation[0],rotation[1])
-                color.writeVMD('%s_%d%d%d.tcl'%(prefix,trip[0],trip[1],trip[2]),
-                               self.filenames, trip_colors, trip, f_dat.shape[1], sigma=sigma,
-                               bonds=bonds)
+                key = '%d%d%d'%trip
+                color.writeVMD('%s_%s.tcl'%(prefix,key),
+                               self.filenames, trip_colors, key, f_dat.shape[1],
+                               sigma=sigma, bonds=bonds)
     def buildDMap(self):
         if self.master:
             self.dmap.build(self.dists,landmarks=self.lm_idx,

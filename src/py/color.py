@@ -68,7 +68,7 @@ def rankOrderTransform(R):
     coords[nan_idx,:] = 1.
     return coords
 
-def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,mode='add',bonds=False):
+def writeVMD(filename,snapshots,colors,key,n_col,sigma=1.0,mode='add',bonds=False):
     # create a VMD draw script
     fid = open(filename,'w')
     cmds = ['axes location off',
@@ -97,7 +97,7 @@ def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,mode='add',bonds=Fals
             frame_name = frame[:-filetype] + 'bonds.xml'
             vdw_scale = 0.4
         else:
-            frame_name = frame_run
+            frame_name = frame
             vdw_scale = 1.0
         if frame_run != prev or mode == "new":
             if '.xml' in frame_name:
@@ -110,7 +110,7 @@ def writeVMD(filename,snapshots,colors,com,n_col,sigma=1.0,mode='add',bonds=Fals
             print('mol addfile %s %s'%(frame_name,on_load),file=fid)
             newFrame = False
         cmds = ['[atomselect top "all"] set radius %f'%(0.50*sigma),
-                'set fid [open "%s'%frame + '_%d%d%d'%com + '.cmap"]',
+                'set fid [open "%s'%frame + '_%s'%key + '.cmap"]',
                 'set file_data [read $fid]',
                 'close $fid',
                 'set sel [atomselect top "all"]',
