@@ -68,7 +68,7 @@ def rankOrderTransform(R):
     coords[nan_idx,:] = 1.
     return coords
 
-def writeVMD(filename,snapshots,colors,key,n_col,sigma=1.0,mode='add',bonds=False):
+def writeVMD(filename,snapshots,colors,key,n_col,sigma=1.0,mode='auto',name_level=1,bonds=False):
     # create a VMD draw script
     fid = open(filename,'w')
     cmds = ['axes location off',
@@ -90,7 +90,7 @@ def writeVMD(filename,snapshots,colors,key,n_col,sigma=1.0,mode='add',bonds=Fals
         c += 1
     prev = 'None'
     for f, frame in enumerate(snapshots):
-        frame_run = ''.join(frame.split('.')[:-1])
+        frame_run = ''.join(frame.split('.')[:-name_level])
         suffix = frame.split('.')[-1]
         if bonds:
             filetype = frame[::-1].find('.')

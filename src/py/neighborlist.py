@@ -14,13 +14,6 @@ from crayon import _crayon
 
 from scipy.cluster import hierarchy
 
-try:
-    import freud
-    foundFreud = True
-except:
-    print('Warning: freud python module not found, neighborlist.AdaptiveCNA will not be available')
-    foundFreud = False
-
 def visit(i,snap,particles,visited,members,level,remaining):
     if level >= sys.getrecursionlimit()/2:
         return False
@@ -154,30 +147,6 @@ class NeighborList:
         for i in range(snap.N):
                 adjacency.append(self.particleAdjacency(i,snap.neighbors))
         return adjacency
-
-class AdaptiveCNA(NeighborList):
-    def setParams(self,r_max=4.,max_nbr=16,
-                  strict_rcut=True,near_nbr=6,geo_factor=1.2071):
-        self.r_max = r_max
-        self.max_nbr = max_nbr
-        self.strict_rcut = strict_rcut
-        self.near_nbr = near_nbr
-        self.geo_factor = geo_factor
-        if not foundFreud:
-            raise RuntimeError('neighborlist.AdaptiveCNA requires freud')
-    def getNeighbors(self,snap):
-        box = freud.box.Box(Lx=snap.L[0],Ly=snap.L[1],Lz=snap.L[2],is2D=False)
-        nl  = freud.locality.NearestNeighbors(self.r_max,self.max_nbr,strict_cut=self.strict_rcut)
-        nl.compute(box,snap.xyz,snap.xyz)
-        Rsq = nl.getRsqList()
-        Rsq[Rsq < 0] = np.nan
-        R6 = np.nanmean(Rsq[:,:self.near_nbr],axis=1)
-        Rcut = self.geo_factor**2. * R6
-        nl = nl.getNeighborList()
-        neighbors = []
-        for i in range(snap.N):
-            neighbors.append(np.hstack(([i],nl[i,Rsq[i,:]<Rcut[i]])))
-        return neighbors, neighbors
 
 class Voronoi(NeighborList):
     def setParams(self,r_max=None,r_max_multiple=None,
