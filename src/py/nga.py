@@ -400,7 +400,7 @@ class Ensemble:
         self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito,similarity=similarity)
     def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,
                       VMD=False,Ovito=False,similarity=True,
-                      bonds=False,rotation=None):
+                      bonds=False,rotation=None,verbose=False):
         # enforce list-of-lists style triplets
         if type(trips[0]) == int:
             trips = [trips]
@@ -449,16 +449,20 @@ class Ensemble:
             if VMD:
                 trip_colors = colors[t]
                 if rotation is not None:
-                    trip_colors = color.rotate(trip_colors,rotation[0],rotation[1])
+                    if type(rotation) == tuple:
+                        rotation = [rotation]
+                    for rot in rotation:
+                        trip_colors = color.rotate(trip_colors,rot[0],rot[1])
                 key = '%d%d%d'%trip
                 color.writeVMD('%s_%s.tcl'%(prefix,key),
                                self.filenames, trip_colors, key, f_dat.shape[1],
                                sigma=sigma, bonds=bonds)
-    def buildDMap(self):
+    def buildDMap(self,freq=None):
         if self.master:
             self.dmap.build(self.dists,landmarks=self.lm_idx,
                             valid_cols=self.valid_cols,
-                            valid_rows=self.valid_rows)
+                            valid_rows=self.valid_rows,
+                            freq=freq)
             print('Diffusion map construction complete')
             self.dmap.write()
             np.savetxt('graph-counts.dat',self.graph_library.counts)

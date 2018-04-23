@@ -27,10 +27,11 @@ class DMap:
         self.evals = None
         self.evecs = None
         self.evecs_ny = None
-        self.color_coords = None
+        self.coords = None
     def build(self,dists,landmarks=None,
               valid_cols=None,
-              valid_rows=None):
+              valid_rows=None,
+              freq=None):
         if valid_rows is None:
             valid_rows = np.arange(dists.shape[0])
         if valid_cols is None:
@@ -71,7 +72,7 @@ class DMap:
             R = self.evecs
         else:
             R = self.evecs_ny
-        self.color_coords = color.rankOrderTransform(R)
+        self.color_coords = color.rankTransform(R,freq)
         # first eigenvector is always trivial
         self.color_coords[:,0] = 0.5
         # catch nan rows

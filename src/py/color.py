@@ -55,15 +55,22 @@ def rotate(coords,axis,turns):
     t = 0.5*np.ones(3)
     return t+np.matmul(coords-t,R[axis])
 
-def rankOrderTransform(R):
+def rankTransform(R,freq=None):
     # transform data to uniform distribution
     coords = np.zeros(R.shape)*np.nan
     # transform each remaining eigenvector to yield a uniform distribution
     for i in range(R.shape[1]):
         r = R[:,i]
-        s = np.unique(r[r==r])
-        x = np.linspace(0.,1.,len(s))
-        coords[:,i] = np.interp(r,s,x)
+        idx = np.argsort(r[r==r])
+        rs = r[r==r][idx]
+        if freq is not None:
+            fs = freq[r==r][idx]
+            s = np.array([])
+            for j in range(len(rs)):
+                s = np.hstack( (s,np.ones(fs[j])*rs[j]) )
+            rs = s
+        x = np.linspace(0.,1.,len(rs))
+        coords[:,i] = np.interp(r,rs,x)
     nan_idx = np.argwhere(np.isnan(coords[:,-1])).flatten()
     coords[nan_idx,:] = 1.
     return coords

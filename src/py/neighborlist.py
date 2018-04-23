@@ -130,8 +130,9 @@ class Network:
         return (self.gdv[self.i],self.ngdv[self.i])
 
 class NeighborList:
-    def __init__(self,enforce_symmetry=True):
+    def __init__(self,enforce_symmetry=True,max_neighbors=None):
         self.enforce_symmetry = enforce_symmetry
+        self.max_neighbors = max_neighbors
         self.setParams()
     def setParams(self):
         pass
@@ -142,6 +143,12 @@ class NeighborList:
             for j in nn:
                 if i not in NL[j]:
                     NL[j] = np.append(NL[j],i)
+    def removeOverbonded(self,NL):
+        for i, nn in enumerate(NL):
+            if len(nn) > self.max_neighbors+1:
+                NL[i] = np.array([i])
+                for j in nn:
+                    NL[j] = np.delete(NL[j],np.argwhere(NL[j]==i))
     def getAdjacency(self,snap):
         adjacency = []
         for i in range(snap.N):
@@ -216,6 +223,8 @@ class Voronoi(NeighborList):
             all_neighbors.append(np.array(nn,dtype=np.int))
         if self.enforce_symmetry:
             self.symmetrize(all_neighbors)
+        if self.max_neighbors is not None:
+            self.removeOverbonded(all_neighbors)
         if len(np.unique(snap.T)) == 1:
             return all_neighbors, all_neighbors
         # use neighborhood to build multi-atom patterns
