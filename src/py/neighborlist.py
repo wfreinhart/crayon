@@ -225,22 +225,4 @@ class Voronoi(NeighborList):
             self.symmetrize(all_neighbors)
         if self.max_neighbors is not None:
             self.removeOverbonded(all_neighbors)
-        if len(np.unique(snap.T)) == 1:
-            return all_neighbors, all_neighbors
-        # use neighborhood to build multi-atom patterns
-        same_neighbors = [[] for idx in range(snap.N)]
-        for t in np.unique(snap.T):
-            t_idx = np.argwhere(snap.T==t).flatten()
-            nl = _crayon.voropp(snap.xyz[t_idx,:], snap.L,
-                                'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
-            for i in range(len(nl)):
-                nl[i] = np.unique(t_idx[np.array(nl[i])])
-            for i in range(len(t_idx)):
-                if self.clustering:
-                    nn = self.filterNeighbors(i,t_idx[i],nl,snap)
-                else:
-                    nn = nl[i]
-                same_neighbors[t_idx[i]] = nn
-        if self.enforce_symmetry:
-            self.symmetrize(same_neighbors)
-        return same_neighbors, all_neighbors
+        return all_neighbors
