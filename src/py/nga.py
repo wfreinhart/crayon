@@ -391,16 +391,15 @@ class Ensemble:
                 d = np.min(self.dists,axis=1)
                 self.valid_rows = np.argwhere(d < thresh).flatten()
                 self.invalid_rows = np.argwhere(d >= thresh).flatten()
-    def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False,Ovito=False,similarity=True):
+    def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False):
         coms = None
         if self.master:
             coms, best = self.dmap.uncorrelatedTriplets()
             print('probable best eigenvector triplet is %s'%str(coms[best]))
         coms = self.p.shareData(coms)
-        self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD,Ovito=Ovito,similarity=similarity)
+        self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD)
     def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,
-                      VMD=False,Ovito=False,similarity=True,
-                      bonds=False,rotation=None,verbose=False):
+                      VMD=False,bonds=False,rotation=None):
         # enforce list-of-lists style triplets
         if type(trips[0]) == int:
             trips = [trips]
@@ -433,14 +432,16 @@ class Ensemble:
             else:
                 snap = Snapshot(filename + '.nga')
             for t, trip in enumerate(trips):
-                if similarity:
-                    sim = color.neighborSimilarity(frame_maps[t][f],snap.neighbors,color_coords[:,np.array(trip)])
-                else:
-                    sim = color_coords[frame_maps[t][f].reshape(-1,1),np.array(trip)]
+                cc = color_coords[frame_maps[t][f].reshape(-1,1),np.array(trip)]
                 mapped_color = color_maps[t][frame_maps[t][f]].reshape(-1,1)
+                if rotation is not None:
+                    if type(rotation) == tuple:
+                        rotation = [rotation]
+                    for rot in rotation:
+                        cc = color.rotate(cc,rot[0],rot[1])
                 for inv in self.invalid_rows:
                     mapped_color[mapped_color==inv] = -1
-                f_dat = np.hstack((mapped_color,sim))
+                f_dat = np.hstack((mapped_color,cc))
                 np.savetxt(filename + '_%d%d%d.cmap'%trip, f_dat)
         if not self.master:
             return
