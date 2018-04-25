@@ -22,8 +22,7 @@ git submodule update --init --recursive
 
 ## Compiling crayon
 
-To build crayon, ensure that the `hoomd` module is on your Python path
-(or hint to its location using `HOOMD_ROOT`), and install to an appropriate location:
+To build crayon, simply use `cmake` to install to an appropriate location:
 
 ```bash
 cd /path/to/crayon
