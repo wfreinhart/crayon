@@ -34,8 +34,10 @@ make install
 ### Prerequisites
 
  * Required:
+     * [PyDMap](https://github.com/awlong/DiffusionMap)
      * Python >= 2.7
      * numpy >= 1.7
+     * scipy >= 1.0.0
      * CMake >= 3.1.0
      * C++11 compliant compiler
      * Boost graph library headers

@@ -18,12 +18,7 @@ from crayon import dmap
 
 import numpy as np
 from scipy.cluster import hierarchy
-
-try:
-    import pickle
-    allow_binary = True
-except:
-    allow_binary = False
+import pickle
 
 class Snapshot:
     R""" holds necessary data from a simulation snapshot and handles
@@ -40,14 +35,13 @@ class Snapshot:
         # initialize class member variables
         self.neighbors = None
         self.adjacency = None
-        self.graph_library = None
+        self.library = None
         # default options for building libraries
         self.global_mode = False
         self.graphlet_k = 5
         self.cluster = True
         self.cluster_thresh = None
         self.n_shells = 1
-        self.q_thresh = None
         # load from file
         if reader is None:
             filename = reader_input
@@ -102,29 +96,25 @@ class Snapshot:
         # perform clustering to find relevant structures?
         if 'cluster' in options:
             self.cluster = options['cluster']
-        # threshold radius to use in the clustering
+        # threshold radius in dmap space to allow in same cluster
         if 'cluster_thresh' in options:
             self.cluster_thresh = options['cluster_thresh']
         # number of neighbor shells to use (forced)
         if 'n_shells' in options:
             self.n_shells = options['n_shells']
-        # threshold for spherical harmonics
-        if 'q_thresh' in options:
-            self.q_thresh = options['q_thresh']
     def buildLibrary(self,**kwargs):
         self.parseOptions(kwargs)
-        self.graph_library = classifiers.GraphLibrary()
+        self.library = classifiers.GraphLibrary()
         if self.adjacency is None:
             if self.neighbors is None:
                 self.buildNeighborhoods()
             self.buildAdjacency()
-        self.graph_library.build(self.adjacency,k=self.graphlet_k)
+        self.library.build(self.adjacency,k=self.graphlet_k)
         if self.cluster:
-            self.graph_library.sizes = neighborlist.largest_clusters(self,self.graph_library,self.cluster_thresh)
+            self.library.sizes = neighborlist.largest_clusters(self,self.library,self.cluster_thresh)
     def mapTo(self,library):
-        snap_lib = self.graph_library
         m = np.zeros(self.N,dtype=np.int) * np.nan
-        for sig, idx in snap_lib.lookup.items():
+        for sig, idx in self.library.lookup.items():
             if sig in library.index:
                 m[idx] = library.index[sig]
         return m
@@ -137,7 +127,7 @@ class Snapshot:
         if neighbors:
             buff['neighbors'] = self.neighbors
         if library:
-            buff['graph_library'] = self.graph_library
+            buff['library'] = self.library
         with open(filename,'wb') as fid:
             pickle.dump(buff,fid)
     def load(self,filename):
@@ -146,8 +136,8 @@ class Snapshot:
         if 'neighbors' in buff:
             self.neighbors = buff['neighbors']
             self.N = len(self.neighbors)
-        if 'graph_library' in buff:
-            self.graph_library = buff['graph_library']
+        if 'library' in buff:
+            self.library = buff['library']
 
 class Ensemble:
     def __init__(self,**kwargs):
@@ -155,7 +145,7 @@ class Ensemble:
         self.options = kwargs
         # set default values
         self.filenames = []
-        self.graph_library = classifiers.GraphLibrary()
+        self.library = classifiers.GraphLibrary()
         self.graph_lookups = {}
         self.graphs = []
         self.dists = None
@@ -177,21 +167,21 @@ class Ensemble:
             snap = Snapshot(filename,pbc='xyz',nl=nl)
             self.insert(f,snap)
             snap.save(filename + '.nga',neighbors=True)
-        print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.graph_library.items)))
+        print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.library.items)))
         self.collect()
     def insert(self,idx,snap):
-        if snap.graph_library is None:
+        if snap.library is None:
             snap.buildLibrary(**self.options)
-        self.graph_library.collect(snap.graph_library)
-        self.graph_lookups[idx] = snap.graph_library.lookup
+        self.library.collect(snap.library)
+        self.graph_lookups[idx] = snap.library.lookup
     def backmap(self,idx):
         N = 0
         for sig, idx in self.graph_lookups[idx].items():
             N += len(val)
         m = np.zeros(N,dtype=np.int) * np.nan
         for sig, idx in self.graph_lookups[idx].items():
-            if sig in self.graph_library.index:
-                m[idx] = self.graph_library.index[sig]
+            if sig in self.library.index:
+                m[idx] = self.library.index[sig]
         return np.array(m,dtype=np.int)
     def collect(self):
         others = self.p.gatherData(self)
@@ -205,16 +195,16 @@ class Ensemble:
             raise TypeError('Ensemble.collect expects a list of Ensemble objects')
         # iterate over supplied library instances
         for other in others:
-            self.graph_library.collect(other.graph_library)
+            self.library.collect(other.library)
             for key, val in other.graph_lookups.items():
                 if key in self.graph_lookups:
                     print('Warning: duplicate graph lookup key detected during Ensemble.collect')
                 self.graph_lookups[key] = val
-        print('ensemble graph collection complete, found %d unique graphs'%len(self.graph_library.items))
+        print('ensemble graph collection complete, found %d unique graphs'%len(self.library.items))
     def prune(self,num_random=None,num_top=None,min_freq=None,min_percentile=None,mode='frequency'):
         if not self.master:
             return
-        library = self.graph_library
+        library = self.library
         if mode == 'frequency':
             vals = library.counts
         elif mode == 'clustersize':
@@ -242,7 +232,7 @@ class Ensemble:
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
     def getFrameMaps(self,cidx):
         lookups = self.graph_lookups
-        library = self.graph_library
+        library = self.library
         frames = lookups.keys()
         frames.sort()
         frame_maps = []
@@ -258,11 +248,11 @@ class Ensemble:
             return
         # prepare NGDVs for distance calculation
         dat = []
-        for g in self.graph_library.items:
+        for g in self.library.items:
             dat.append(g.ngdv)
         dat = np.array(dat)
         # perform distance calculation
-        n = len(self.graph_library.sigs)
+        n = len(self.library.sigs)
         try:
             m = len(self.lm_sigs)
         except:
