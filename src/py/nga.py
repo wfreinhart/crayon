@@ -9,7 +9,6 @@
 from __future__ import print_function
 
 from crayon import _crayon
-from crayon import bondorder
 from crayon import classifiers
 from crayon import parallel
 from crayon import neighborlist
@@ -119,11 +118,6 @@ class Snapshot:
             if self.neighbors is None:
                 self.buildNeighborhoods()
             self.buildAdjacency()
-        if self.q_thresh is not None:
-            q_range = bondorder.computeQRange(self)
-            disordered = np.argwhere(q_range < self.q_thresh).flatten()
-            for idx in disordered:
-                self.adjacency[idx] = np.ones((1,1))
         self.graph_library.build(self.adjacency,k=self.graphlet_k)
         if self.cluster:
             self.graph_library.sizes = neighborlist.largest_clusters(self,self.graph_library,self.cluster_thresh)
@@ -183,7 +177,7 @@ class Ensemble:
             snap = Snapshot(filename,pbc='xyz',nl=nl)
             self.insert(f,snap)
             snap.save(filename + '.nga',neighbors=True)
-            print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.graph_library.items)))
+        print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.graph_library.items)))
         self.collect()
     def insert(self,idx,snap):
         if snap.graph_library is None:
@@ -246,8 +240,7 @@ class Ensemble:
         m = len(self.lm_idx)
         self.lm_sigs = [library.sigs[idx] for idx in self.lm_idx]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
-    def getColorMaps(self,cidx):
-        c, c_map = color.compressColors(self.dmap.color_coords[:,cidx],delta=0.001)
+    def getFrameMaps(self,cidx):
         lookups = self.graph_lookups
         library = self.graph_library
         frames = lookups.keys()
@@ -259,8 +252,8 @@ class Ensemble:
             for key, val in lookups[f].items():
                 frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
             frame_maps.append(frame_data)
-        return c, c_map, frame_maps
-    def computeGraphDists(self):
+        return frame_maps
+    def computeDists(self):
         if not self.master:
             return
         # prepare NGDVs for distance calculation
@@ -278,8 +271,6 @@ class Ensemble:
         self.dists = np.zeros((n,m))
         for i, lm in enumerate(self.lm_idx):
             self.dists[:,i] = np.linalg.norm(dat-dat[lm],axis=1)
-    def computeDists(self):
-        self.computeGraphDists()
     def detectDistOutliers(self,mode=None,thresh=None):
         if self.master:
             # detect outliers, if requested
@@ -311,35 +302,17 @@ class Ensemble:
                 d = np.min(self.dists,axis=1)
                 self.valid_rows = np.argwhere(d < thresh).flatten()
                 self.invalid_rows = np.argwhere(d >= thresh).flatten()
-    def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False):
-        coms = None
-        if self.master:
-            coms, best = self.dmap.uncorrelatedTriplets()
-            print('probable best eigenvector triplet is %s'%str(coms[best]))
-        coms = self.p.shareData(coms)
-        self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD)
-    def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,
-                      VMD=False,bonds=False,rotation=None):
-        # enforce list-of-lists style triplets
-        if type(trips[0]) == int:
-            trips = [trips]
+    def writeColors(self,bonds=False,rotation=None):
+        trip = np.array([1,2,3])
         # share data among workers
-        colors = []
-        color_maps = []
-        frame_maps = []
+        frame_maps = None
         color_coords = None
         if self.master:
             color_coords = self.dmap.color_coords
-            for trip in trips:
-                c, cm, fm = self.getColorMaps(np.array(trip))
-                colors.append(c)
-                color_maps.append(cm)
-                frame_maps.append(fm)
-        colors = self.p.shareData(colors)
-        frame_maps = self.p.shareData(frame_maps)
-        color_maps = self.p.shareData(color_maps)
+            frame_maps = self.getFrameMaps(trip)
         color_coords = self.p.shareData(color_coords)
-        # compute cluster similarity
+        frame_maps = self.p.shareData(frame_maps)
+        # map local structure indices to ensemble
         local_file_idx  = parallel.partition(range(len(self.filenames)))
         for f in local_file_idx:
             filename = self.filenames[f]
@@ -351,33 +324,17 @@ class Ensemble:
                 io.writeXML(filename[:-filetype] + 'bonds.xml',snap,bonds=bonds)
             else:
                 snap = Snapshot(filename + '.nga')
-            for t, trip in enumerate(trips):
-                cc = color_coords[frame_maps[t][f].reshape(-1,1),np.array(trip)]
-                mapped_color = color_maps[t][frame_maps[t][f]].reshape(-1,1)
-                if rotation is not None:
-                    if type(rotation) == tuple:
-                        rotation = [rotation]
-                    for rot in rotation:
-                        cc = color.rotate(cc,rot[0],rot[1])
-                for inv in self.invalid_rows:
-                    mapped_color[mapped_color==inv] = -1
-                f_dat = np.hstack((mapped_color,cc))
-                np.savetxt(filename + '_%d%d%d.cmap'%trip, f_dat)
-        if not self.master:
-            return
-        # write visualization scripts
-        for t, trip in enumerate(trips):
-            if VMD:
-                trip_colors = colors[t]
-                if rotation is not None:
-                    if type(rotation) == tuple:
-                        rotation = [rotation]
-                    for rot in rotation:
-                        trip_colors = color.rotate(trip_colors,rot[0],rot[1])
-                key = '%d%d%d'%trip
-                color.writeVMD('%s_%s.tcl'%(prefix,key),
-                               self.filenames, trip_colors, key, f_dat.shape[1],
-                               sigma=sigma, bonds=bonds)
+            fm = frame_maps[f].reshape(-1,1)
+            cc = color_coords[fm,trip]
+            if rotation is not None:
+                if type(rotation) == tuple:
+                    rotation = [rotation]
+                for rot in rotation:
+                    cc = color.rotate(cc,rot[0],rot[1])
+            for inv in self.invalid_rows:
+                fm[fm==inv] = -1
+            f_dat = np.hstack((fm,cc))
+            np.savetxt(filename + '.cmap', f_dat)
     def buildDMap(self,freq=None):
         if self.master:
             self.dmap.build(self.dists,landmarks=self.lm_idx,
@@ -385,7 +342,3 @@ class Ensemble:
                             valid_rows=self.valid_rows,
                             freq=freq)
             print('Diffusion map construction complete')
-            self.dmap.write()
-            np.savetxt('graph-counts.dat',self.graph_library.counts)
-            np.savetxt('graph-sizes.dat',self.graph_library.sizes)
-            np.savetxt('graph-landmarks.dat',self.lm_idx)
