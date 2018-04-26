@@ -104,6 +104,16 @@ VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
     return nl;
     }
 
+std::vector<std::vector<int>>
+CellNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
+    const bool x_pbc, const bool y_pbc, const bool z_pbc,
+    const float rcut)
+    {
+    std::vector<std::vector<int>> nl(R.rows());
+    CellList cells = new CellList(*R,*L,rcut);
+    return nl;
+    }
+
 void export_VoroNeighbors(pybind11::module& m)
     {
     m.def("voropp",&VoroNeighbors);

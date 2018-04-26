@@ -20,6 +20,7 @@
 
 #include <voro++/voro++.hh>
 
+#include "CellList.h"
 #include "Neighborhood.h"
 
 namespace crayon
@@ -29,6 +30,10 @@ std::vector<Graph> buildGraphs(const std::vector<std::vector<int>> NL, unsigned 
 
 std::vector<std::vector<int>>
     VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
+    const bool x_pbc, const bool y_pbc, const bool z_pbc);
+
+std::vector<std::vector<int>>
+    CellNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
     const bool x_pbc, const bool y_pbc, const bool z_pbc);
 
 void export_VoroNeighbors(pybind11::module& m);
