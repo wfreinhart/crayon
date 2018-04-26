@@ -26,8 +26,7 @@ try:
 except:
     foundGSD = False
 
-def readXYZ(snap,reader_input):
-    filename = reader_input
+def readXYZ(filename):
     # read values from file
     with open(filename,'r') as config:
         lines = config.readlines()
@@ -41,15 +40,11 @@ def readXYZ(snap,reader_input):
     xyz = np.zeros((N,3))
     for i, l in enumerate(lines[2:]):
         xyz[i,:] = [float(x) for x in l.split()[1:]]
-    # assign values to Snapshot
-    snap.N = len(xyz)
-    snap.xyz = xyz
-    snap.box = box
+    return xyz, box
 
-def readXML(snap,reader_input):
+def readXML(filename):
     if not foundETree:
         raise RuntimeError('xml.etree.ElementTree module not found')
-    filename = reader_input
     # read values from file
     config  = open(filename,'r')
     tree = etree.parse(config)
@@ -63,28 +58,20 @@ def readXML(snap,reader_input):
     txt = elem.text
     dat = np.fromstring(txt,sep=' ')
     xyz = np.reshape(dat,(-1,3))
-    N = len(xyz)
     config.close()
-    # assign values to Snapshot
-    snap.N = N
-    snap.xyz = xyz
-    snap.box = box
+    return xyz, box
 
-def readGSD(snap,reader_input):
+def readGSD(filename,frame):
     if not foundGSD:
         raise RuntimeError('GSD module not found')
-    filename = reader_input
     # read trajectory from gsd file
     gsd_file = gsd.fl.GSDFile(filename,'rb')
     gsd_traj = gsd.hoomd.HOOMDTrajectory(gsd_file)
-    gsd_frame = gsd_traj[-1]
+    gsd_frame = gsd_traj[frame]
     # read values from file
     box = gsd_frame.configuration.box[:3]
     xyz = gsd_frame.particles.position[:,:3]
-    # assign values to Snapshot
-    snap.N = len(xyz)
-    snap.xyz = xyz
-    snap.box = box
+    return xyz, box
 
 def readListParallel(filename):
     p = parallel.ParallelTask()
