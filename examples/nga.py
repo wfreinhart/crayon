@@ -1,10 +1,4 @@
 from __future__ import print_function
-import sys
-
-import numpy as np
-
-sys.path.append('/Users/wfr/code/crayon')
-sys.path.append('/Users/wfr/code/DiffusionMap/build')
 import crayon
 
 # snapshots to analyze
