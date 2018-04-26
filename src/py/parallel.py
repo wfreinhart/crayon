@@ -9,6 +9,8 @@ import sys
 import math
 import time
 
+import numpy as np
+
 try:
     from mpi4py import MPI
     parallel_enabled = True
@@ -29,8 +31,9 @@ def partition(l):
     comm, size, rank, master = info()
     division = len(l) / float(size)
     p = [ l[int(round(division * i)): int(round(division * (i + 1)))] for i in xrange(size) ]
-    p.sort()
-    return p[::-1][rank]
+    q = [str(s) for s in p]
+    r = [p[x] for x in np.argsort(q)]
+    return r[::-1][rank]
 
 class ETA:
     def __init__(self,n=0,reports=1):
