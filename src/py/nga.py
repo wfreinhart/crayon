@@ -9,22 +9,16 @@
 from __future__ import print_function
 
 from crayon import _crayon
-from crayon import bondorder
 from crayon import classifiers
 from crayon import parallel
 from crayon import neighborlist
 from crayon import color
-from crayon import io
 from crayon import dmap
+from crayon import io
 
 import numpy as np
 from scipy.cluster import hierarchy
-
-try:
-    import pickle
-    allow_binary = True
-except:
-    allow_binary = False
+import pickle
 
 class Snapshot:
     R""" holds necessary data from a simulation snapshot and handles
@@ -33,75 +27,57 @@ class Snapshot:
     Args:
         reader_input (tuple): the input tuple for the reader function
         reader (function): takes (Snapshot,reader_input) as input and
-                           sets Snapshot.N, Snapshot.L, and Snapshot.xyz
+                           sets Snapshot.N, Snapshot.box, and Snapshot.xyz
         nl (crayon::Neighborlist): a neighborlist generation class
         pbc (str) (optional): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz'):
+    def __init__(self,xyz=None,box=None,nl=None,pbc='xyz'):
         # initialize class member variables
         self.neighbors = None
         self.adjacency = None
-        self.graph_library = None
-        self.pattern_library = None
+        self.library = None
         # default options for building libraries
-        self.pattern_mode = False
         self.global_mode = False
         self.graphlet_k = 5
         self.cluster = True
         self.cluster_thresh = None
         self.n_shells = 1
-        self.q_thresh = None
-        # load from file
-        if reader is None:
-            filename = reader_input
-            try:
-                self.load(reader_input)
-                return None
-            except:
-                if '.xml' in filename:
-                    reader = io.readXML
-                elif '.gsd' in filename:
-                    reader = io.readGSD
-                elif '.xyz' in filename:
-                    reader = io.readXYZ
-        # read from generator function
-        reader(self,reader_input)
+        # assign attributes
+        self.xyz = xyz
+        self.box = box
+        if self.xyz is not None:
+            self.N = len(self.xyz)
+        else:
+            self.N = None
+        # check for valid NeighborList object
+        if nl is not None:
+            if type(nl) != type(neighborlist.NeighborList()):
+                raise ValueError('nl must be a NeighborList object')
+            self.nl = nl
         # check for valid periodic boundary conditions
         for p in pbc:
             if p.lower() not in 'xyz':
                 raise ValueError('periodic boundary conditions must be combination of x, y, and z')
         self.pbc = pbc
-        # check for valid NeighborList object
-        if nl is not None:
-            if type(nl) != type(neighborlist.NeighborList()):
-                raise ValueError('nl must be a NeighborList object')
-        else:
-            raise RuntimeError('must provide a NeighborList object')
-        self.nl = nl
         # auto-detect 2D configuration
-        span = np.max(self.xyz,axis=0) - np.min(self.xyz,axis=0)
-        dims = 'xyz'
-        for i, s in enumerate(span):
-            if s < 1e-4:
-                print('detected 2D configuration')
-                # force values for better compatibility with Voro++
-                self.L[i] = 1.
-                self.xyz[:,i] = 0.
-                self.pbc = self.pbc.replace(dims[i],'')
+        if self.xyz is not None:
+            span = np.max(self.xyz,axis=0) - np.min(self.xyz,axis=0)
+            dims = 'xyz'
+            for i, s in enumerate(span):
+                if s < 1e-4:
+                    print('detected 2D configuration')
+                    # force values for better compatibility with Voro++
+                    self.box[i] = 1.
+                    self.xyz[:,i] = 0.
+                    self.pbc = self.pbc.replace(dims[i],'')
     def buildNeighborhoods(self):
-        if self.pattern_mode:
-            self.neighbors, self.all_neighbors = self.nl.getNeighbors(self)
-        else:
-            self.same_neighbors, self.neighbors = self.nl.getNeighbors(self)
+        self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
         if self.global_mode:
             self.adjacency = neighborlist.Network(self,k=self.graphlet_k)
         else:
             self.adjacency = _crayon.buildGraphs(self.neighbors,self.n_shells)
     def parseOptions(self,options):
-        # use multi-atom Patterns?
-        if 'pattern_mode' in options:
-            self.pattern_mode = options['pattern_mode']
         # use a global Network instead of local Neighborhoods?
         if 'global_mode' in options:
             self.global_mode = options['global_mode']
@@ -111,59 +87,38 @@ class Snapshot:
         # perform clustering to find relevant structures?
         if 'cluster' in options:
             self.cluster = options['cluster']
-        # threshold radius to use in the clustering
+        # threshold radius in dmap space to allow in same cluster
         if 'cluster_thresh' in options:
             self.cluster_thresh = options['cluster_thresh']
         # number of neighbor shells to use (forced)
         if 'n_shells' in options:
             self.n_shells = options['n_shells']
-        # threshold for spherical harmonics
-        if 'q_thresh' in options:
-            self.q_thresh = options['q_thresh']
     def buildLibrary(self,**kwargs):
         self.parseOptions(kwargs)
-        self.graph_library = classifiers.GraphLibrary()
+        self.library = classifiers.GraphLibrary()
         if self.adjacency is None:
             if self.neighbors is None:
                 self.buildNeighborhoods()
             self.buildAdjacency()
-        if self.q_thresh is not None:
-            q_range = bondorder.computeQRange(self)
-            disordered = np.argwhere(q_range < self.q_thresh).flatten()
-            for idx in disordered:
-                self.adjacency[idx] = np.ones((1,1))
-        self.graph_library.build(self.adjacency,k=self.graphlet_k)
+        self.library.build(self.adjacency,k=self.graphlet_k)
         if self.cluster:
-            self.graph_library.sizes = neighborlist.largest_clusters(self,self.graph_library,self.cluster_thresh)
-        if self.pattern_mode:
-            self.pattern_library = classifiers.PatternLibrary()
-            self.map_graphs = self.mapTo(self.graph_library)
-            self.pattern_library.build(self.all_neighbors,
-                                       self.graph_library.sigs,
-                                       self.map_graphs)
+            self.library.sizes = neighborlist.largest_clusters(self,self.library,self.cluster_thresh)
     def mapTo(self,library):
-        if type(library) == type(classifiers.GraphLibrary()):
-            snap_lib = self.graph_library
-        elif type(library) == type(classifiers.PatternLibrary()):
-            snap_lib = self.pattern_library
-        else:
-            raise ValueError('must supply either a GraphLibrary or PatternLibrary object')
         m = np.zeros(self.N,dtype=np.int) * np.nan
-        for sig, idx in snap_lib.lookup.items():
+        for sig, idx in self.library.lookup.items():
             if sig in library.index:
                 m[idx] = library.index[sig]
         return m
     def wrap(self,v):
         pbc = np.asarray([dim in self.pbc for dim in 'xyz'],dtype=np.float)
-        w = v - self.L * np.round( v / self.L * pbc)
+        w = v - self.box * np.round( v / self.box * pbc)
         return w
     def save(self,filename,neighbors=False,library=False):
         buff = {}
         if neighbors:
             buff['neighbors'] = self.neighbors
         if library:
-            buff['graph_library'] = self.graph_library
-            buff['pattern_library'] = self.pattern_library
+            buff['library'] = self.library
         with open(filename,'wb') as fid:
             pickle.dump(buff,fid)
     def load(self,filename):
@@ -172,67 +127,38 @@ class Snapshot:
         if 'neighbors' in buff:
             self.neighbors = buff['neighbors']
             self.N = len(self.neighbors)
-        if 'graph_library' in buff:
-            self.graph_library = buff['graph_library']
-        if 'pattern_library' in buff:
-            self.pattern_library = buff['pattern_library']
+        if 'library' in buff:
+            self.library = buff['library']
 
 class Ensemble:
     def __init__(self,**kwargs):
         # evaluate optoins
         self.options = kwargs
-        if 'pattern_mode' in self.options:
-            self.pattern_mode = self.options['pattern_mode']
-        else:
-            self.pattern_mode = False
         # set default values
         self.filenames = []
-        self.graph_library = classifiers.GraphLibrary()
+        self.library = classifiers.GraphLibrary()
         self.graph_lookups = {}
-        self.graphs = []
-        self.pattern_library = classifiers.PatternLibrary()
-        self.pattern_lookups = {}
-        self.patterns = []
         self.dists = None
         self.valid_cols = None
         self.valid_rows = None
         self.invalid_rows = np.array([])
         self.dmap = dmap.DMap()
+        self.color_rotation = None
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
-    def neighborhoodsFromFile(self,filenames,nl):
-        if type(filenames) == str:
-            filenames = [filenames]
-        self.filenames = filenames
-        local_file_idx  = parallel.partition(range(len(self.filenames)))
-        for f in local_file_idx:
-            filename = self.filenames[f]
-            print('rank %d of %d will process %s'%(self.rank,self.size,filename))
-            # create snapshot instance and build neighborhoods
-            snap = Snapshot(filename,pbc='xyz',nl=nl)
-            self.insert(f,snap)
-            snap.save(filename + '.nga',neighbors=True)
-        if self.pattern_mode:
-            print('rank %d tasks complete, found %d unique graphs and %d unique patterns'%(self.rank,len(self.graph_library.items),len(self.pattern_library.items)))
-        else:
-            print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.graph_library.items)))
-        self.collect()
     def insert(self,idx,snap):
-        if snap.graph_library is None:
+        if snap.library is None:
             snap.buildLibrary(**self.options)
-        self.graph_library.collect(snap.graph_library)
-        self.graph_lookups[idx] = snap.graph_library.lookup
-        if self.pattern_mode:
-            self.pattern_library.collect(snap.pattern_library)
-            self.pattern_lookups[idx] = snap.pattern_library.lookup
+        self.library.collect(snap.library)
+        self.graph_lookups[idx] = snap.library.lookup
     def backmap(self,idx):
         N = 0
         for sig, idx in self.graph_lookups[idx].items():
             N += len(val)
         m = np.zeros(N,dtype=np.int) * np.nan
         for sig, idx in self.graph_lookups[idx].items():
-            if sig in self.graph_library.index:
-                m[idx] = self.graph_library.index[sig]
+            if sig in self.library.index:
+                m[idx] = self.library.index[sig]
         return np.array(m,dtype=np.int)
     def collect(self):
         others = self.p.gatherData(self)
@@ -246,29 +172,16 @@ class Ensemble:
             raise TypeError('Ensemble.collect expects a list of Ensemble objects')
         # iterate over supplied library instances
         for other in others:
-            self.graph_library.collect(other.graph_library)
+            self.library.collect(other.library)
             for key, val in other.graph_lookups.items():
                 if key in self.graph_lookups:
                     print('Warning: duplicate graph lookup key detected during Ensemble.collect')
                 self.graph_lookups[key] = val
-        print('ensemble graph collection complete, found %d unique graphs'%len(self.graph_library.items))
-        if self.pattern_mode:
-            print('collecting patterns')
-            # repeat with patterns
-            for other in others:
-                self.pattern_library.collect(other.pattern_library)
-                for key, val in other.pattern_lookups.items():
-                    if key in self.pattern_lookups:
-                        print('Warning: duplicate pattern lookup key detected during Ensemble.collect')
-                    self.pattern_lookups[key] = val
-            print('ensemble pattern collection complete, found %d unique patterns'%len(self.pattern_library.items))
+        print('ensemble graph collection complete, found %d unique graphs'%len(self.library.items))
     def prune(self,num_random=None,num_top=None,min_freq=None,min_percentile=None,mode='frequency'):
         if not self.master:
             return
-        if self.pattern_mode:
-            library = self.pattern_library
-        else:
-            library = self.graph_library
+        library = self.library
         if mode == 'frequency':
             vals = library.counts
         elif mode == 'clustersize':
@@ -294,59 +207,16 @@ class Ensemble:
         m = len(self.lm_idx)
         self.lm_sigs = [library.sigs[idx] for idx in self.lm_idx]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
-    def getColorMaps(self,cidx):
-        c, c_map = color.compressColors(self.dmap.color_coords[:,cidx],delta=0.001)
-        if self.pattern_mode:
-            lookups = self.pattern_lookups
-            library = self.pattern_library
-        else:
-            lookups = self.graph_lookups
-            library = self.graph_library
-        frames = lookups.keys()
-        frames.sort()
-        frame_maps = []
-        for f in frames:
-            N = np.sum(np.asarray([len(val) for key, val in lookups[f].items()]))
-            frame_data = np.zeros(N,dtype=np.int)
-            for key, val in lookups[f].items():
-                frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
-            frame_maps.append(frame_data)
-        return c, c_map, frame_maps
-    def computePatternDists(self):
-        # prepare task list
-        if self.master:
-            n = len(self.pattern_library.sigs)
-            try:
-                m = len(self.lm_sigs)
-            except:
-                m = n
-                self.lm_idx = np.arange(n)
-            self.dists = np.zeros( (n,m) ) + np.Inf # designate null values with Inf
-            for i in range(n):
-                for j in range(m):
-                    task_list.append( (i,self.lm_idx[j]) )
-        # perform graph matching in parallel using MPI
-        items = self.p.shareData(self.pattern_library.items)
-        eval_func = lambda task, data: data[task[0]] - data[task[1]]
-        result_list = self.p.computeQueue(function=eval_func,
-                                          tasks=task_list,
-                                          reports=10)
-        # convert results into numpy array
-        if self.master:
-            for k, d in enumerate(result_list):
-                i, j = task_list[k]
-                jid = np.argwhere(self.lm_idx == j)[0]
-                self.dists[i,jid] = d
-    def computeGraphDists(self):
+    def computeDists(self):
         if not self.master:
             return
         # prepare NGDVs for distance calculation
         dat = []
-        for g in self.graph_library.items:
+        for g in self.library.items:
             dat.append(g.ngdv)
         dat = np.array(dat)
         # perform distance calculation
-        n = len(self.graph_library.sigs)
+        n = len(self.library.sigs)
         try:
             m = len(self.lm_sigs)
         except:
@@ -355,11 +225,6 @@ class Ensemble:
         self.dists = np.zeros((n,m))
         for i, lm in enumerate(self.lm_idx):
             self.dists[:,i] = np.linalg.norm(dat-dat[lm],axis=1)
-    def computeDists(self):
-        if self.pattern_mode:
-            self.computePatternDists()
-        else:
-            self.computeGraphDists()
     def detectDistOutliers(self,mode=None,thresh=None):
         if self.master:
             # detect outliers, if requested
@@ -391,81 +256,70 @@ class Ensemble:
                 d = np.min(self.dists,axis=1)
                 self.valid_rows = np.argwhere(d < thresh).flatten()
                 self.invalid_rows = np.argwhere(d >= thresh).flatten()
-    def autoColor(self,prefix='draw_colors',sigma=1.0,VMD=False):
-        coms = None
-        if self.master:
-            coms, best = self.dmap.uncorrelatedTriplets()
-            print('probable best eigenvector triplet is %s'%str(coms[best]))
-        coms = self.p.shareData(coms)
-        self.colorTriplets(coms,prefix=prefix,sigma=sigma,VMD=VMD)
-    def colorTriplets(self,trips,prefix='draw_colors',sigma=1.0,
-                      VMD=False,bonds=False,rotation=None):
-        # enforce list-of-lists style triplets
-        if type(trips[0]) == int:
-            trips = [trips]
+    def getFrameMaps(self):
+        lookups = self.graph_lookups
+        library = self.library
+        frames = lookups.keys()
+        frame_maps = {}
+        for f in frames:
+            N = np.sum(np.asarray([len(val) for key, val in lookups[f].items()]))
+            frame_data = np.zeros(N,dtype=np.int)
+            for key, val in lookups[f].items():
+                frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
+            frame_maps[f] = frame_data
+        return frame_maps
+    def writeColors(self):
         # share data among workers
-        colors = []
-        color_maps = []
-        frame_maps = []
+        frame_maps = None
         color_coords = None
         if self.master:
-            color_coords = self.dmap.color_coords
-            for trip in trips:
-                c, cm, fm = self.getColorMaps(np.array(trip))
-                colors.append(c)
-                color_maps.append(cm)
-                frame_maps.append(fm)
-        colors = self.p.shareData(colors)
-        frame_maps = self.p.shareData(frame_maps)
-        color_maps = self.p.shareData(color_maps)
+            color_coords = np.copy(self.dmap.color_coords)
+            frame_maps = self.getFrameMaps()
         color_coords = self.p.shareData(color_coords)
-        # compute cluster similarity
-        local_file_idx  = parallel.partition(range(len(self.filenames)))
+        frame_maps = self.p.shareData(frame_maps)
+        # map local structure indices to ensemble
+        keys = frame_maps.keys()
+        keys.sort() # keys are not guaranteed to appear in the same order
+        local_file_idx  = parallel.partition(range(len(keys)))
         for f in local_file_idx:
-            filename = self.filenames[f]
-            if bonds:
-                nl = neighborlist.NeighborList()
-                snap = Snapshot(filename,nl=nl)
-                snap.load(filename + '.nga')
-                filetype = filename[::-1].find('.')
-                io.writeXML(filename[:-filetype] + 'bonds.xml',snap,bonds=bonds)
-            else:
-                snap = Snapshot(filename + '.nga')
-            for t, trip in enumerate(trips):
-                cc = color_coords[frame_maps[t][f].reshape(-1,1),np.array(trip)]
-                mapped_color = color_maps[t][frame_maps[t][f]].reshape(-1,1)
-                if rotation is not None:
-                    if type(rotation) == tuple:
-                        rotation = [rotation]
-                    for rot in rotation:
-                        cc = color.rotate(cc,rot[0],rot[1])
-                for inv in self.invalid_rows:
-                    mapped_color[mapped_color==inv] = -1
-                f_dat = np.hstack((mapped_color,cc))
-                np.savetxt(filename + '_%d%d%d.cmap'%trip, f_dat)
-        if not self.master:
-            return
-        # write visualization scripts
-        for t, trip in enumerate(trips):
-            if VMD:
-                trip_colors = colors[t]
-                if rotation is not None:
-                    if type(rotation) == tuple:
-                        rotation = [rotation]
-                    for rot in rotation:
-                        trip_colors = color.rotate(trip_colors,rot[0],rot[1])
-                key = '%d%d%d'%trip
-                color.writeVMD('%s_%s.tcl'%(prefix,key),
-                               self.filenames, trip_colors, key, f_dat.shape[1],
-                               sigma=sigma, bonds=bonds)
+            filename = keys[f]
+            # snap = Snapshot()
+            # snap.load(filename + '.nga')
+            fm = frame_maps[keys[f]].reshape(-1,1)
+            cc = color_coords[fm,np.array([1,2,3])]
+            if self.color_rotation is not None:
+                if type(self.color_rotation) == tuple:
+                    self.color_rotation = [self.color_rotation]
+                for rot in self.color_rotation:
+                    cc = color.rotate(cc,rot[0],rot[1])
+            # need to distribute invalid_rows across ranks
+            # for inv in self.invalid_rows:
+            #     fm[fm==inv] = -1
+            fdat = np.hstack((fm,cc))
+            np.savetxt(filename + '.cmap', fdat)
     def buildDMap(self,freq=None):
         if self.master:
             self.dmap.build(self.dists,landmarks=self.lm_idx,
                             valid_cols=self.valid_cols,
-                            valid_rows=self.valid_rows,
-                            freq=freq)
+                            valid_rows=self.valid_rows)
             print('Diffusion map construction complete')
-            self.dmap.write()
-            np.savetxt('graph-counts.dat',self.graph_library.counts)
-            np.savetxt('graph-sizes.dat',self.graph_library.sizes)
-            np.savetxt('graph-landmarks.dat',self.lm_idx)
+    def makeSnapshot(self,filename):
+        if not self.master:
+            return
+        cd = np.copy(self.dmap.coords[:,1:4])
+        cc = np.copy(self.dmap.color_coords[:,1:4])
+        if self.color_rotation is not None:
+            if type(self.color_rotation) == tuple:
+                self.color_rotation = [self.color_rotation]
+            for rot in self.color_rotation:
+                cc = color.rotate(cc,rot[0],rot[1])
+        # find bounds
+        box = 2.*np.max(np.abs(cd),axis=0)
+        snap = Snapshot()
+        snap.box = box
+        snap.xyz = cd
+        snap.N = len(snap.xyz)
+        io.writeXYZ('%s'%filename,snap)
+        fm = np.arange(snap.N).reshape(-1,1)
+        fdat = np.hstack((fm,cc))
+        np.savetxt('%s.cmap'%filename,fdat)

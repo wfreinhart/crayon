@@ -7,14 +7,14 @@
 
 from crayon import _crayon
 import color
-import nga
-import neighborlist
-import io
-import bondorder
+import classifiers
 try:
     import dmap
 except:
     print('Warning: diffusion map features disabled')
+import io
+import neighborlist
+import nga
 try:
     import parallel
 except:

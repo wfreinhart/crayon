@@ -30,8 +30,7 @@ class DMap:
         self.coords = None
     def build(self,dists,landmarks=None,
               valid_cols=None,
-              valid_rows=None,
-              freq=None):
+              valid_rows=None):
         if valid_rows is None:
             valid_rows = np.arange(dists.shape[0])
         if valid_cols is None:
@@ -72,36 +71,10 @@ class DMap:
             R = self.evecs
         else:
             R = self.evecs_ny
-        self.color_coords = color.rankTransform(R,freq)
+        self.coords = R
+        self.color_coords = color.rankTransform(R)
         # first eigenvector is always trivial
         self.color_coords[:,0] = 0.5
         # catch nan rows
         nan_idx = np.argwhere(np.isnan(self.color_coords[:,-1])).flatten()
         self.color_coords[nan_idx,:] = 1.
-    def write(self,prefix='',binary=False):
-        if binary:
-            buff = {'evals': self.evals,
-                    'evecs': self.evecs,
-                    'evecs_ny': self.evecs_ny,
-                    'color_coords': self.color_coords}
-            with open('%sdmap.bin'%prefix,'wb') as fid:
-                pickle.dump(buff,fid)
-        else:
-            np.savetxt('%sevals.dat'%prefix,self.evals)
-            np.savetxt('%sevecs-lm.dat'%prefix,self.evecs)
-            if self.evecs_ny is not None:
-                np.savetxt('%sevecs-ny.dat'%prefix,self.evecs_ny)
-            if self.color_coords is not None:
-                np.savetxt('%scolor-coords.dat'%prefix,self.color_coords)
-    def uncorrelatedTriplets(self):
-        # first determine least correlated eigenvectors
-        X = np.abs( np.corrcoef(np.transpose(self.color_coords[:,1:])) )
-        Y = np.zeros(X.shape[1])
-        coms = []
-        for i in range(X.shape[1]):
-            com = tuple( np.sort( [i+1] + list(np.argsort(X[:,i])[:2]+1) ) )
-            if com not in coms:
-                coms.append(com)
-            Y[i] = np.sum(X[i,np.asarray(com)-1])
-        best = np.argwhere(Y[i] == np.min(Y[i]))
-        return coms, best

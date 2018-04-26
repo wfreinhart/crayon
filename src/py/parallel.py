@@ -9,12 +9,18 @@ import sys
 import math
 import time
 
+import numpy as np
+
 try:
     from mpi4py import MPI
+    parallel_enabled = True
 except:
-    raise RuntimeError('crayon.parallel requires mpi4py')
+    print('crayon.parallel functionality requires mpi4py')
+    parallel_enabled = False
 
 def info():
+    if not parallel_enabled:
+        return None, 1, 0, True
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
     rank = comm.Get_rank()
@@ -25,8 +31,9 @@ def partition(l):
     comm, size, rank, master = info()
     division = len(l) / float(size)
     p = [ l[int(round(division * i)): int(round(division * (i + 1)))] for i in xrange(size) ]
-    p.sort()
-    return p[::-1][rank]
+    q = [str(s) for s in p]
+    r = [p[x] for x in np.argsort(q)]
+    return r[::-1][rank]
 
 class ETA:
     def __init__(self,n=0,reports=1):
@@ -37,7 +44,6 @@ class ETA:
         self.interval = int(math.ceil(float(n)/reports))
         if self.interval < 1:
             self.interval = 1
-
     def report(self,i):
         if i > 0 and i%self.interval == 0:
             elapsed = time.time()-self.startTime
@@ -56,7 +62,6 @@ class ParallelTask:
         if self.size < 2:
             print('Warning: ParallelTask is only aware of one MPI rank! Computing in solo mode.')
             self.solo_mode = True
-
     def shareData(self,data):
         if self.master:
             self.data = data
@@ -66,7 +71,6 @@ class ParallelTask:
             sys.stdout.flush()
             self.data = self.comm.recv(source=0, tag=0)
         return self.data
-
     def gatherData(self,data):
         if self.master:
             datas = []
@@ -77,7 +81,6 @@ class ParallelTask:
         else:
             self.comm.send(data, dest=0, tag=0)
             return None
-
     def computeQueue(self,function=None,tasks=None,reports=10):
         if self.solo_mode:
             return self.soloCompute(function,tasks,reports)
@@ -85,7 +88,6 @@ class ParallelTask:
             return self.masterCompute(tasks,reports)
         else:
             return self.slaveCompute(function)
-
     def slaveCompute(self,function):
         while True:
             # await instructions
@@ -98,7 +100,6 @@ class ParallelTask:
             buff = (self.rank, index, task, result)
             self.comm.send(buff, dest=0, tag=2)
         return None
-
     def masterCompute(self,tasks,reports):
         # set up accounting system for tasks
         nThreads = min(self.size,len(tasks))
@@ -137,7 +138,6 @@ class ParallelTask:
         print('Parallel queue complete. Execution time: ',elapsed)
         # return result
         return results
-
     def soloCompute(self,function,tasks,reports):
         countdown = ETA(len(tasks),reports)
         results = []
