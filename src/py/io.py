@@ -33,25 +33,18 @@ def readXYZ(snap,reader_input):
         lines = config.readlines()
     N = int(lines[0])
     if 'Lattice=' in lines[1]:
-        L = np.asarray([float(x) for x in lines[1].replace('Lattice=','').replace('"','').split()[::4]])
+        box = np.asarray([float(x) for x in lines[1].replace('Lattice=','').replace('"','').split()[::4]])
     elif len(lines[1].split) == 3:
-        L = np.asarray([float(x) for x in lines[1].split()])
+        box = np.asarray([float(x) for x in lines[1].split()])
     else:
         raise RuntimeError('unexpected box format in file %s'%filename)
-    R = np.zeros((N,3))
-    T_list = np.zeros(N,dtype=str)
+    xyz = np.zeros((N,3))
     for i, l in enumerate(lines[2:]):
-        R[i,:] = [float(x) for x in l.split()[1:]]
-        T_list[i] = l.split()[0]
-    types = list(np.unique(T_list))
-    T = np.zeros(N,dtype=np.int)
-    for i, t in enumerate(types):
-        T[T_list==t] = i
+        xyz[i,:] = [float(x) for x in l.split()[1:]]
     # assign values to Snapshot
-    snap.N = len(R)
-    snap.xyz = R
-    snap.L = L
-    snap.T = T
+    snap.N = len(xyz)
+    snap.xyz = xyz
+    snap.box = box
 
 def readXML(snap,reader_input):
     if not foundETree:
@@ -65,29 +58,17 @@ def readXML(snap,reader_input):
     lx = float(elem.attrib["lx"])
     ly = float(elem.attrib["ly"])
     lz = float(elem.attrib["lz"])
-    L = np.array([lx,ly,lz])
+    box = np.array([lx,ly,lz])
     elem = root.getiterator("position")[0]
     txt = elem.text
     dat = np.fromstring(txt,sep=' ')
-    R = np.reshape(dat,(-1,3))
-    N = len(R)
-    try:
-        elem = root.getiterator("type")[0]
-        txt = elem.text
-        dat = txt.replace(' ','').split('\n')
-        T_list = np.array([d for d in dat if len(d) > 0])
-        types = list(np.unique(T_list))
-        T = np.zeros(N,dtype=np.int)
-        for i, t in enumerate(types):
-            T[T_list==t] = i
-    except:
-        T = np.zeros(N)
+    xyz = np.reshape(dat,(-1,3))
+    N = len(xyz)
     config.close()
     # assign values to Snapshot
     snap.N = N
-    snap.xyz = R
-    snap.L = L
-    snap.T = T
+    snap.xyz = xyz
+    snap.box = box
 
 def readGSD(snap,reader_input):
     if not foundGSD:
@@ -98,14 +79,12 @@ def readGSD(snap,reader_input):
     gsd_traj = gsd.hoomd.HOOMDTrajectory(gsd_file)
     gsd_frame = gsd_traj[-1]
     # read values from file
-    L = gsd_frame.configuration.box[:3]
-    R = gsd_frame.particles.position[:,:3]
-    T = gsd_frame.particles.typeid
+    box = gsd_frame.configuration.box[:3]
+    xyz = gsd_frame.particles.position[:,:3]
     # assign values to Snapshot
-    snap.N = len(R)
-    snap.xyz = R
-    snap.L = L
-    snap.T = T
+    snap.N = len(xyz)
+    snap.xyz = xyz
+    snap.box = box
 
 def readListParallel(filename):
     p = parallel.ParallelTask()
@@ -122,7 +101,7 @@ def readListParallel(filename):
 def writeXYZ(filename,snap):
     fid = open(filename,'w+')
     print('%d'%snap.N,file=fid)
-    print('Lattice="%.6f 0.0 0.0 0.0 %.6f 0.0 0.0 0.0 %.6f"'%tuple(snap.L),file=fid)
+    print('Lattice="%.6f 0.0 0.0 0.0 %.6f 0.0 0.0 0.0 %.6f"'%tuple(snap.box),file=fid)
     for i in range(snap.N):
         print('C %.6f %.6f %.6f'%tuple(snap.xyz[i]),file=fid)
     fid.close()
@@ -132,7 +111,7 @@ def writeXML(filename,snap,bonds=False):
     print('<?xml version="1.0" encoding="UTF-8"?>',file=fid)
     print('<hoomd_xml version="1.7">',file=fid)
     print('<configuration time_step="0" dimensions="3" natoms="%d" >'%snap.N,file=fid)
-    print('<box lx="%.6f" ly="%.6f" lz="%.6f" xy="0" xz="0" yz="0"/>'%tuple(snap.L),file=fid)
+    print('<box lx="%.6f" ly="%.6f" lz="%.6f" xy="0" xz="0" yz="0"/>'%tuple(snap.box),file=fid)
     print('<position num="%d">'%snap.N,file=fid)
     for i in range(snap.N):
         print('%.6f %.6f %.6f'%tuple(snap.xyz[i]),file=fid)

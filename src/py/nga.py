@@ -14,6 +14,7 @@ from crayon import parallel
 from crayon import neighborlist
 from crayon import color
 from crayon import dmap
+from crayon import io
 
 import numpy as np
 from scipy.cluster import hierarchy
@@ -142,6 +143,7 @@ class Ensemble:
         self.valid_rows = None
         self.invalid_rows = np.array([])
         self.dmap = dmap.DMap()
+        self.color_rotation = None
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
     def insert(self,idx,snap):
@@ -266,12 +268,12 @@ class Ensemble:
                 frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
             frame_maps[f] = frame_data
         return frame_maps
-    def writeColors(self,rotation=None):
+    def writeColors(self):
         # share data among workers
         frame_maps = None
         color_coords = None
         if self.master:
-            color_coords = self.dmap.color_coords
+            color_coords = np.copy(self.dmap.color_coords)
             frame_maps = self.getFrameMaps()
         color_coords = self.p.shareData(color_coords)
         frame_maps = self.p.shareData(frame_maps)
@@ -285,20 +287,39 @@ class Ensemble:
             # snap.load(filename + '.nga')
             fm = frame_maps[keys[f]].reshape(-1,1)
             cc = color_coords[fm,np.array([1,2,3])]
-            if rotation is not None:
-                if type(rotation) == tuple:
-                    rotation = [rotation]
-                for rot in rotation:
+            if self.color_rotation is not None:
+                if type(self.color_rotation) == tuple:
+                    self.color_rotation = [self.color_rotation]
+                for rot in self.color_rotation:
                     cc = color.rotate(cc,rot[0],rot[1])
             # need to distribute invalid_rows across ranks
             # for inv in self.invalid_rows:
             #     fm[fm==inv] = -1
-            f_dat = np.hstack((fm,cc))
-            np.savetxt(filename + '.cmap', f_dat)
+            fdat = np.hstack((fm,cc))
+            np.savetxt(filename + '.cmap', fdat)
     def buildDMap(self,freq=None):
         if self.master:
             self.dmap.build(self.dists,landmarks=self.lm_idx,
                             valid_cols=self.valid_cols,
-                            valid_rows=self.valid_rows,
-                            freq=freq)
+                            valid_rows=self.valid_rows)
             print('Diffusion map construction complete')
+    def makeSnapshot(self,filename):
+        if not self.master:
+            return
+        cd = np.copy(self.dmap.coords[:,1:4])
+        cc = np.copy(self.dmap.color_coords[:,1:4])
+        if self.color_rotation is not None:
+            if type(self.color_rotation) == tuple:
+                self.color_rotation = [self.color_rotation]
+            for rot in self.color_rotation:
+                cc = color.rotate(cc,rot[0],rot[1])
+        # find bounds
+        box = 2.*np.max(np.abs(cd),axis=0)
+        snap = Snapshot()
+        snap.box = box
+        snap.xyz = cd
+        snap.N = len(snap.xyz)
+        io.writeXYZ('%s'%filename,snap)
+        fm = np.arange(snap.N).reshape(-1,1)
+        fdat = np.hstack((fm,cc))
+        np.savetxt('%s.cmap'%filename,fdat)
