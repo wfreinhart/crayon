@@ -13,7 +13,6 @@ from crayon import classifiers
 from crayon import parallel
 from crayon import neighborlist
 from crayon import color
-from crayon import io
 from crayon import dmap
 
 import numpy as np
@@ -27,11 +26,11 @@ class Snapshot:
     Args:
         reader_input (tuple): the input tuple for the reader function
         reader (function): takes (Snapshot,reader_input) as input and
-                           sets Snapshot.N, Snapshot.L, and Snapshot.xyz
+                           sets Snapshot.N, Snapshot.box, and Snapshot.xyz
         nl (crayon::Neighborlist): a neighborlist generation class
         pbc (str) (optional): dimensions with periodic boundaries (defaults to 'xyz')
     """
-    def __init__(self,reader_input,reader=None,nl=None,pbc='xyz'):
+    def __init__(self,xyz=None,box=None,nl=None,pbc='xyz'):
         # initialize class member variables
         self.neighbors = None
         self.adjacency = None
@@ -42,43 +41,34 @@ class Snapshot:
         self.cluster = True
         self.cluster_thresh = None
         self.n_shells = 1
-        # load from file
-        if reader is None:
-            filename = reader_input
-            try:
-                self.load(reader_input)
-                return None
-            except:
-                if '.xml' in filename:
-                    reader = io.readXML
-                elif '.gsd' in filename:
-                    reader = io.readGSD
-                elif '.xyz' in filename:
-                    reader = io.readXYZ
-        # read from generator function
-        reader(self,reader_input)
+        # assign attributes
+        self.xyz = xyz
+        self.box = box
+        if self.xyz is not None:
+            self.N = len(self.xyz)
+        else:
+            self.N = None
+        # check for valid NeighborList object
+        if nl is not None:
+            if type(nl) != type(neighborlist.NeighborList()):
+                raise ValueError('nl must be a NeighborList object')
+            self.nl = nl
         # check for valid periodic boundary conditions
         for p in pbc:
             if p.lower() not in 'xyz':
                 raise ValueError('periodic boundary conditions must be combination of x, y, and z')
         self.pbc = pbc
-        # check for valid NeighborList object
-        if nl is not None:
-            if type(nl) != type(neighborlist.NeighborList()):
-                raise ValueError('nl must be a NeighborList object')
-        else:
-            raise RuntimeError('must provide a NeighborList object')
-        self.nl = nl
         # auto-detect 2D configuration
-        span = np.max(self.xyz,axis=0) - np.min(self.xyz,axis=0)
-        dims = 'xyz'
-        for i, s in enumerate(span):
-            if s < 1e-4:
-                print('detected 2D configuration')
-                # force values for better compatibility with Voro++
-                self.L[i] = 1.
-                self.xyz[:,i] = 0.
-                self.pbc = self.pbc.replace(dims[i],'')
+        if self.xyz is not None:
+            span = np.max(self.xyz,axis=0) - np.min(self.xyz,axis=0)
+            dims = 'xyz'
+            for i, s in enumerate(span):
+                if s < 1e-4:
+                    print('detected 2D configuration')
+                    # force values for better compatibility with Voro++
+                    self.box[i] = 1.
+                    self.xyz[:,i] = 0.
+                    self.pbc = self.pbc.replace(dims[i],'')
     def buildNeighborhoods(self):
         self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
@@ -120,7 +110,7 @@ class Snapshot:
         return m
     def wrap(self,v):
         pbc = np.asarray([dim in self.pbc for dim in 'xyz'],dtype=np.float)
-        w = v - self.L * np.round( v / self.L * pbc)
+        w = v - self.box * np.round( v / self.box * pbc)
         return w
     def save(self,filename,neighbors=False,library=False):
         buff = {}
@@ -147,7 +137,6 @@ class Ensemble:
         self.filenames = []
         self.library = classifiers.GraphLibrary()
         self.graph_lookups = {}
-        self.graphs = []
         self.dists = None
         self.valid_cols = None
         self.valid_rows = None
@@ -155,20 +144,6 @@ class Ensemble:
         self.dmap = dmap.DMap()
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
-    def neighborhoodsFromFile(self,filenames,nl):
-        if type(filenames) == str:
-            filenames = [filenames]
-        self.filenames = filenames
-        local_file_idx  = parallel.partition(range(len(self.filenames)))
-        for f in local_file_idx:
-            filename = self.filenames[f]
-            print('rank %d of %d will process %s'%(self.rank,self.size,filename))
-            # create snapshot instance and build neighborhoods
-            snap = Snapshot(filename,pbc='xyz',nl=nl)
-            self.insert(f,snap)
-            snap.save(filename + '.nga',neighbors=True)
-        print('rank %d tasks complete, found %d unique graphs'%(self.rank,len(self.library.items)))
-        self.collect()
     def insert(self,idx,snap):
         if snap.library is None:
             snap.buildLibrary(**self.options)
@@ -230,19 +205,6 @@ class Ensemble:
         m = len(self.lm_idx)
         self.lm_sigs = [library.sigs[idx] for idx in self.lm_idx]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
-    def getFrameMaps(self,cidx):
-        lookups = self.graph_lookups
-        library = self.library
-        frames = lookups.keys()
-        frames.sort()
-        frame_maps = []
-        for f in frames:
-            N = np.sum(np.asarray([len(val) for key, val in lookups[f].items()]))
-            frame_data = np.zeros(N,dtype=np.int)
-            for key, val in lookups[f].items():
-                frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
-            frame_maps.append(frame_data)
-        return frame_maps
     def computeDists(self):
         if not self.master:
             return
@@ -292,37 +254,45 @@ class Ensemble:
                 d = np.min(self.dists,axis=1)
                 self.valid_rows = np.argwhere(d < thresh).flatten()
                 self.invalid_rows = np.argwhere(d >= thresh).flatten()
-    def writeColors(self,bonds=False,rotation=None):
-        trip = np.array([1,2,3])
+    def getFrameMaps(self):
+        lookups = self.graph_lookups
+        library = self.library
+        frames = lookups.keys()
+        frame_maps = {}
+        for f in frames:
+            N = np.sum(np.asarray([len(val) for key, val in lookups[f].items()]))
+            frame_data = np.zeros(N,dtype=np.int)
+            for key, val in lookups[f].items():
+                frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
+            frame_maps[f] = frame_data
+        return frame_maps
+    def writeColors(self,rotation=None):
         # share data among workers
         frame_maps = None
         color_coords = None
         if self.master:
             color_coords = self.dmap.color_coords
-            frame_maps = self.getFrameMaps(trip)
+            frame_maps = self.getFrameMaps()
         color_coords = self.p.shareData(color_coords)
         frame_maps = self.p.shareData(frame_maps)
         # map local structure indices to ensemble
-        local_file_idx  = parallel.partition(range(len(self.filenames)))
+        keys = frame_maps.keys()
+        keys.sort() # keys are not guaranteed to appear in the same order
+        local_file_idx  = parallel.partition(range(len(keys)))
         for f in local_file_idx:
-            filename = self.filenames[f]
-            if bonds:
-                nl = neighborlist.NeighborList()
-                snap = Snapshot(filename,nl=nl)
-                snap.load(filename + '.nga')
-                filetype = filename[::-1].find('.')
-                io.writeXML(filename[:-filetype] + 'bonds.xml',snap,bonds=bonds)
-            else:
-                snap = Snapshot(filename + '.nga')
-            fm = frame_maps[f].reshape(-1,1)
-            cc = color_coords[fm,trip]
+            filename = keys[f]
+            # snap = Snapshot()
+            # snap.load(filename + '.nga')
+            fm = frame_maps[keys[f]].reshape(-1,1)
+            cc = color_coords[fm,np.array([1,2,3])]
             if rotation is not None:
                 if type(rotation) == tuple:
                     rotation = [rotation]
                 for rot in rotation:
                     cc = color.rotate(cc,rot[0],rot[1])
-            for inv in self.invalid_rows:
-                fm[fm==inv] = -1
+            # need to distribute invalid_rows across ranks
+            # for inv in self.invalid_rows:
+            #     fm[fm==inv] = -1
             f_dat = np.hstack((fm,cc))
             np.savetxt(filename + '.cmap', f_dat)
     def buildDMap(self,freq=None):

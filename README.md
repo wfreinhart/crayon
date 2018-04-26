@@ -64,45 +64,36 @@ be imported as usual:
 import crayon
 ```
 
-Snapshots can be analyzed individually or as a trajectory. To build a `Library` of all unique
-graphs in a simulation `Snapshot`:
+Each simulation `Snapshot` must be initialiezd with particle positions, box dimensions, and a
+reference to a `NeighborList` object:
 
 ```python
 nl = crayon.neighborlist.Voronoi()
-reader_input = 'my_file.xyz'
-snap = crayon.nga.Snapshot(reader_input,reader=crayon.io.readXYZ,nl=nl)
-snap.buildLibrary()
+snap = crayon.nga.Snapshot(xyz=xyz,box=box,nl=nl)
 ```
 
-The `reader` argument can be a reference to any function which accepts `(snap,reader_input)` as
-input and sets the `snap.N` (number of particles), `snap.L` (box dimensions), `snap.xyz` (positions),
-and optionally `snap.T` (types). `crayon.io` includes functions for reading XYZ, XML, and GSD files
-and will automatically use the appropriate function if no `reader` is supplied.
-
-NGA operates on `Ensembles` of `Snapshots`. Ensembles can be assembled from Snapshots or generated
-from a list of file paths:
+NGA is performed on an `Ensemble`, which is a collection of `Snapshot` objects. An `Ensemble` is
+be built up from a set of `Snapshot` objects using the `insert` method:
 
 ```python
-ens = crayon.nga.Ensemble()
-ens.insert(0,snap)
-my_files = ['my_file_1.xyz','my_file_2.xyz']
-ens.neighborhoodsFromFile(my_files,nl)
+traj = crayon.nga.Ensemble()
+traj.insert('my_filename.xyz',snap)
 ```
 
-Once an `Ensemble` is provided with `Snapshots`, a `DMap` can be computed to provide a low-dimensional
-representation of all observed structures in the `Ensemble`.
+Once an `Ensemble` is loaded with `Snapshot`s, a `DMap` can be computed to provide a low-dimensional
+representation of all observed structures:
 
 ```python
-ens.computeDists()
-ens.buildDMap()
+traj.computeDists()
+traj.buildDMap()
 ```
 
-The coordinates in low-dimensional space are stored in `ens.dmap.color_coords`, and can be written to
-files using the following convenience function:
+The coordinates in low-dimensional space can be written to files using the following convenience function:
 
 ```python
-ens.colorTriplets((1,2,3))
+traj.writeColors()
 ```
 
-A `.cmap` file will be written for each `Snapshot` in the `Ensemble` containing a list of structure ID
-and RGB triplet for each particle.
+A `.cmap` file will be written for each `Snapshot` in the `Ensemble` containing the structure ID
+and RGB triplet for each particle. The classification can be easily visualized in [Ovito](http://www.ovito.org/)
+using the `Python script` modifier with the script located in `src/py/ovito.py`.

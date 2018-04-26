@@ -11,7 +11,12 @@ import sys
 from crayon import parallel
 
 import numpy as np
-import xml.etree.ElementTree as etree
+
+try:
+    import xml.etree.ElementTree as etree
+    foundETree = True
+except:
+    foundETree = False
 
 try:
     import gsd
@@ -49,6 +54,8 @@ def readXYZ(snap,reader_input):
     snap.T = T
 
 def readXML(snap,reader_input):
+    if not foundETree:
+        raise RuntimeError('xml.etree.ElementTree module not found')
     filename = reader_input
     # read values from file
     config  = open(filename,'r')
