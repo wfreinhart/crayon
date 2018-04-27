@@ -14,7 +14,7 @@ std::vector<Graph> buildGraphs(const std::vector<std::vector<int>> NL, unsigned 
     {
     std::vector<Graph> graphs;
     graphs.resize(NL.size());
-    for( int i = 0; i < NL.size(); i++ )
+    for( unsigned int i = 0; i < NL.size(); i++ )
         {
         std::vector<int> idx = NL[i];
         // loop over the specified number of shells
@@ -41,7 +41,7 @@ std::vector<Graph> buildGraphs(const std::vector<std::vector<int>> NL, unsigned 
         Graph G = Graph(n);
         G[boost::graph_bundle].label = "AdjMat";
         // fill nodes first
-        for( int j = 0; j < n; j++ )
+        for( unsigned int j = 0; j < n; j++ )
             {
             map[idx[j]] = j;
             Graph::vertex_descriptor v = map[j];
@@ -104,19 +104,35 @@ VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
     return nl;
     }
 
-std::vector<std::vector<int>>
+std::vector<Eigen::VectorXi>
 CellNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
     const bool x_pbc, const bool y_pbc, const bool z_pbc,
     const float rcut)
     {
-    std::vector<std::vector<int>> nl(R.rows());
-    CellList cells = new CellList(*R,*L,rcut);
+    std::vector<Eigen::VectorXi> nl(R.rows());
+    CellList cells = CellList(R,L,rcut);
+    unsigned int n_cells = cells.getNumCells().prod();
+    for( unsigned int i = 0; i < n_cells; ++i )
+        {
+        Eigen::VectorXi cell_particles = cells.getParticles(i);
+        Eigen::VectorXi adjacent_particles = cells.getAdjacentParticles(i);
+        for( unsigned int j = 0; j < cell_particles.size(); ++j )
+            {
+            unsigned int idx = cell_particles(j);
+            nl[idx].resize(adjacent_particles.size());
+            for( unsigned int k = 0; k < adjacent_particles.size(); k++ )
+                {
+                nl[idx](k) = adjacent_particles(k);
+                }
+            }
+        }
     return nl;
     }
 
 void export_VoroNeighbors(pybind11::module& m)
     {
     m.def("voropp",&VoroNeighbors);
+    m.def("cellpp",&CellNeighbors);
     m.def("buildGraphs",&buildGraphs);
     }
 

@@ -128,6 +128,8 @@ class CellList
         return wrapped_coords;
         }
 
+    Eigen::Vector3i getNumCells() { return num_cells_;}
+
     private:
     Eigen::Vector3f L_;
 

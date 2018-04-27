@@ -155,6 +155,47 @@ class NeighborList:
                 adjacency.append(self.particleAdjacency(i,snap.neighbors))
         return adjacency
 
+class CellList(NeighborList):
+    def setParams(self,rcut=None):
+        if rcut is not None:
+            self.rcut = rcut
+    def getNeighbors(self,snap):
+        cell = _crayon.cellpp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc, self.rcut)
+        nl = []
+        for i in snap.N:
+            # sort cell list result
+            cc = cell[i]
+            dvec = snap.wrap(snap.xyz[cc] - snap.xyz[i])
+            d = np.sqrt(np.sum(dvec**2.,axis=1))
+            nl.append(cc[d<=self.rcut])
+        return nl
+
+class Hybrid(NeighborList):
+    def setParams(self,rcut=None):
+        if rcut is not None:
+            self.rcut = rcut
+    def getNeighbors(self,snap):
+        # build all-atom neighborlist with Voro++
+        voro = _crayon.voropp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
+        cell = _crayon.cellpp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc, self.rcut)
+        nl = []
+        for i in snap.N:
+            # sort voro result
+            vv = np.hstack((i,np.array(voro[i])))
+            dvec = snap.wrap(snap.xyz[vv] - snap.xyz[i])
+            d = np.sqrt(np.sum(dvec**2.,axis=1))
+            vv = vv[np.argsort(d)]
+            # sort cell list result
+            cc = cell[i]
+            dvec = snap.wrap(snap.xyz[cc] - snap.xyz[i])
+            d = np.sqrt(np.sum(dvec**2.,axis=1))
+            cc = cc[np.argsort(d)]
+            # compare
+            n = min(len(vv),len(cc))
+            ndiv = np.searchsorted(cc[:n] != vv[:n],True)
+            nl.append(cc[:ndiv])
+        return nl
+
 class Voronoi(NeighborList):
     def setParams(self,r_max=None,r_max_multiple=None,
                   clustering=True,cluster_method='centroid',cluster_ratio=0.25):
