@@ -28,7 +28,8 @@ namespace crayon
 
 std::vector<Graph> buildGraphs(const std::vector<std::vector<int>> NL, unsigned int n_shells);
 
-std::vector<std::vector<int>>
+// std::vector<std::vector<int>>
+std::tuple< std::vector<std::vector<int>>, std::vector<std::vector<double>> >
     VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
     const bool x_pbc, const bool y_pbc, const bool z_pbc);
 

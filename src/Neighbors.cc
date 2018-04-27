@@ -67,7 +67,7 @@ std::vector<Graph> buildGraphs(const std::vector<std::vector<int>> NL, unsigned 
     return graphs;
     }
 
-std::vector<std::vector<int>>
+std::tuple< std::vector<std::vector<int>>, std::vector<std::vector<double>> >
 VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
     const bool x_pbc, const bool y_pbc, const bool z_pbc)
     {
@@ -92,6 +92,7 @@ VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
     precon.setup(con);
     //
     std::vector<std::vector<int>> nl(R.rows());
+    std::vector<std::vector<double>> area(R.rows());
     voro::voronoicell_neighbor c;
     // compute each Voronoi cell in the container
     voro::c_loop_all cl(con);
@@ -99,9 +100,10 @@ VoroNeighbors(const Eigen::MatrixXf &R, const Eigen::VectorXf &L,
                           {
                           unsigned int id = cl.pid();
                           c.neighbors(nl[id]);
+                          c.face_areas(area[id]);
                           }
         while (cl.inc());
-    return nl;
+    return std::make_tuple(nl,area);
     }
 
 std::vector<Eigen::VectorXi>

@@ -176,17 +176,23 @@ class Hybrid(NeighborList):
             self.rcut = rcut
     def getNeighbors(self,snap):
         # build all-atom neighborlist with Voro++
-        voro = _crayon.voropp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
+        voro, area = _crayon.voropp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
         cell = _crayon.cellpp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc, self.rcut)
         nl = []
         for i in range(snap.N):
             # sort voro result
             vv = np.hstack((i,np.array(voro[i])))
+            av = np.hstack((np.inf,np.array(area[i])))
             dvec = snap.wrap(snap.xyz[vv] - snap.xyz[i])
             dv = np.sqrt(np.sum(dvec**2.,axis=1))
             o = np.argsort(dv)
+            o = o[dv[o]<=rcut]
             vv = vv[o]
+            av = av[o]
             dv = dv[o]
+            f = av / np.sum(av[1:])
+            t = 1. / len(f) / 10.
+            vv = vv[f>t]
             # sort cell list result
             cc = cell[i]
             dvec = snap.wrap(snap.xyz[cc] - snap.xyz[i])
@@ -259,7 +265,7 @@ class Voronoi(NeighborList):
     # compute Delaunay triangulation with Voro++ library
     def getNeighbors(self,snap):
         # build all-atom neighborlist with Voro++
-        nl = _crayon.voropp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
+        nl, area = _crayon.voropp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
         all_neighbors = []
         for idx in range(snap.N):
             if self.clustering:
