@@ -11,13 +11,8 @@ from crayon import _crayon
 
 import numpy as np
 
-from emd import emd
-
 class Classifier:
     R""" abstract class defining a neighborhood topology
-
-    Args:
-        (none)
     """
     def __init__(self):
         self.s = None
@@ -43,7 +38,8 @@ class Graph(Classifier):
     R""" evaluates topology of neighborhood as presented in a single graph
 
     Args:
-        A (array-like): adjacency matrix defining the neighborhood graph
+        A (array): adjacency matrix defining the neighborhood graph
+        k (int,optional): maximum graphlet size (default 5)
     """
     def __init__(self,A,k=5):
         if type(A) == tuple:
@@ -54,6 +50,12 @@ class Graph(Classifier):
         # build a hashable representation of the graph
         self.s = str(self.sgdv.tolist()).replace(' ','')
     def build(self,A,k=5):
+        R""" builds Graph from adjacency matrix and computes necessary quantities for NGA
+
+        Args:
+            A (array): adjacency matrix
+            k (int,optional): maximum graphlet size (default 5)
+        """
         # instantiate a Crayon::Graph object
         self.cpp = _crayon.neighborhood(A,k)
         # retrieve adjacency matrix
@@ -82,9 +84,6 @@ class Graph(Classifier):
 
 class Library:
     R""" handles sets of generic signatures from snapshots and ensembles of snapshots
-
-    Args:
-        (None)
     """
     def __init__(self):
         self.sigs   = []
@@ -96,6 +95,14 @@ class Library:
     def build(self):
         return
     def find(self,item):
+        R""" locate an object's signature in the Library
+
+        Args:
+            item (object): object to be located
+
+        Returns:
+            index (int): index of the object's signature
+        """
         sig = str(item)
         try:
             return self.index[sig]
@@ -105,12 +112,12 @@ class Library:
         R""" adds an object to the library and returns its index
 
         Args:
-            item (generic): object to consider
-            count (int) (optional): count to add to the library (i.e., number of observations from a Snapshot) (default 1)
-            add (bool) (optional): should the item be added to the library? (default True)
+            item (object): object to consider
+            count (int,optional): count to add to the library (e.g., frequency from Snapshot) (default 1)
+            add (bool,optional): should the item be added to the Library? (alternative is only find) (default True)
 
         Returns:
-            idx (int): the index of this item (signature) in the library
+            idx (int): the index of the item's signature in the library
         """
         sig = str(item)
         try:
@@ -130,6 +137,8 @@ class Library:
 
         Args:
             others (list of Library objects): Library objects to merge into this one
+            counts (bool,optional): should the counts of the others be added together? (default True)
+            sizes (bool,optional): should the maximum size of the others replace this one? (default True)
         """
         if type(others) != list:
             others = list([others])
@@ -144,11 +153,14 @@ class Library:
 
 class GraphLibrary(Library):
     R""" handles sets of graphs from snapshots and ensembles of snapshots
-
-    Args:
-        (None)
     """
     def build(self,neighborhoods,k=5):
+        R""" builds the GraphLibrary from neighborhoods
+
+        Args:
+            neighborhoods (list): list of neighborhoods to build from
+            k (int,optional): maximum graphlet size (default 5)
+        """
         g_idx = np.zeros(len(neighborhoods),dtype=np.int)
         for i, nn in enumerate(neighborhoods):
             G = Graph(nn,k)
