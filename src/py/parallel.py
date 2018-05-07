@@ -19,6 +19,14 @@ except:
     parallel_enabled = False
 
 def info():
+    R""" get MPI info
+
+    Returns:
+        comm (MPI.COMM_WORLD): communicator used by MPI
+        size (int): number of threads
+        rank (int): thread identity
+        master (bool): is this thread the master?
+    """
     if not parallel_enabled:
         return None, 1, 0, True
     comm = MPI.COMM_WORLD
@@ -28,6 +36,14 @@ def info():
     return comm, size, rank, master
 
 def partition(l):
+    R""" partition a list into roughly equal blocks for parallel operations
+
+    Args:
+        l (list): the list to partition
+
+    Returns:
+        r (list): the portion of the list to be used by the active thread
+    """
     comm, size, rank, master = info()
     division = len(l) / float(size)
     p = [ l[int(round(division * i)): int(round(division * (i + 1)))] for i in xrange(size) ]
@@ -36,6 +52,12 @@ def partition(l):
     return r[::-1][rank]
 
 class ETA:
+    R""" handle reporting estimated time remaining during a task
+
+    Args:
+        n (int,optional): number of periods (default 0)
+        reports (int,optional): number of reports between all periods (default 1)
+    """
     def __init__(self,n=0,reports=1):
         # record start time
         self.startTime = time.time()
@@ -45,6 +67,11 @@ class ETA:
         if self.interval < 1:
             self.interval = 1
     def report(self,i):
+        R""" reports the elapsed time and estimated time remaining
+
+        Args:
+            i (int): the current period / time step / task number
+        """
         if i > 0 and i%self.interval == 0:
             elapsed = time.time()-self.startTime
             estimate = elapsed * self.n / float(i)
@@ -53,6 +80,8 @@ class ETA:
             sys.stdout.flush()
 
 class ParallelTask:
+    R""" convenient wrapper for coordinating parallel tasks using MPI4PY
+    """
     def __init__(self):
         self.comm, self.size, self.rank, self.master = info()
         self.data = None
@@ -63,6 +92,14 @@ class ParallelTask:
             print('Warning: ParallelTask is only aware of one MPI rank! Computing in solo mode.')
             self.solo_mode = True
     def shareData(self,data):
+        R""" copy object from master thread to slave threads
+
+        Args:
+            data: any object (only master copy is used)
+
+        Returns:
+            data: copy of the object from master thread
+        """
         if self.master:
             self.data = data
             for i in range(1,self.size):
@@ -72,6 +109,14 @@ class ParallelTask:
             self.data = self.comm.recv(source=0, tag=0)
         return self.data
     def gatherData(self,data):
+        R""" collect data from slave threads on master thread
+
+        Args:
+            data: any object
+
+        Returns:
+            datas (list): data objects from slave threads in order
+        """
         if self.master:
             datas = []
             for i in range(1,self.size):
@@ -82,6 +127,16 @@ class ParallelTask:
             self.comm.send(data, dest=0, tag=0)
             return None
     def computeQueue(self,function=None,tasks=None,reports=10):
+        R""" computes a specified function using a master-slave work-sharing paradigm
+
+        Args:
+            function (function handle): lambda function to be called with (task,self.data)
+            tasks (list): list of inputs to lambda function to be used one at a time
+            reports (int,optional): number of times to report estimated time remaining (default 10)
+
+        Returns:
+            results (list): result from each task in same order
+        """
         if self.solo_mode:
             return self.soloCompute(function,tasks,reports)
         if self.master:
@@ -89,6 +144,12 @@ class ParallelTask:
         else:
             return self.slaveCompute(function)
     def slaveCompute(self,function):
+        R""" compute a function on a slave thread, waiting for master to send instructions
+             and receive results
+
+        Args:
+            function (function handle): lambda function to be called with (task,self.data)
+        """
         while True:
             # await instructions
             (index, task) = self.comm.recv(source=0, tag=1)
@@ -101,6 +162,15 @@ class ParallelTask:
             self.comm.send(buff, dest=0, tag=2)
         return None
     def masterCompute(self,tasks,reports):
+        R""" handle work assignment to slave threads
+
+        Args:
+            tasks (list): list of inputs to lambda function to be used one at a time
+            reports (int): number of times to report estimated time remaining
+
+        Returns:
+            results (list): result from each task in same order
+        """
         # set up accounting system for tasks
         nThreads = min(self.size,len(tasks))
         busyThreads = []
@@ -139,6 +209,16 @@ class ParallelTask:
         # return result
         return results
     def soloCompute(self,function,tasks,reports):
+        R""" compute all tasks on master thread when no slave threads are available
+
+        Args:
+            function (function handle): lambda function to be called with (task,self.data)
+            tasks (list): list of inputs to lambda function to be used one at a time
+            reports (int,optional): number of times to report estimated time remaining (default 10)
+
+        Returns:
+            results (list): result from each task in same order
+        """
         countdown = ETA(len(tasks),reports)
         results = []
         for i in range(len(tasks)):
