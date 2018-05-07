@@ -19,6 +19,8 @@ except:
     raise RuntimeError('dmap submodule requires PyDMap python module')
 
 class DMap:
+     R""" container for computing diffusion maps from Ensembles of Snapshots
+     """
     def __init__(self):
         self._cpp = PyDMap.DMap()
         self.alpha = 1.0
@@ -31,6 +33,14 @@ class DMap:
     def build(self,dists,landmarks=None,
               valid_cols=None,
               valid_rows=None):
+        R""" compute the diffusion map from pre-computed distances
+
+        Args:
+            dists (array): distances between signatures pairwise or against landmarks
+            landmarks (array,optional): landmark indices (assume full pairwise by default)
+            valid_cols (array,optional): columns to include in the DMap (default all columns)
+            valid_rows (array,optional): rows to include in the DMap (default all rows)
+        """
         if valid_rows is None:
             valid_rows = np.arange(dists.shape[0])
         if valid_cols is None:
