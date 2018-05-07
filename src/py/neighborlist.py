@@ -15,6 +15,20 @@ from crayon import _crayon
 from scipy.cluster import hierarchy
 
 def visit(i,snap,particles,visited,members,level,remaining):
+    R""" traverse neighborlist to find clusters
+
+    Args:
+        i (int): particle index
+        snap (Snapshot): Snapshot to work on
+        particles (array): list of particles with the target signature
+        visited (array): nodes which have already been visited
+        members (array): nodes which belong to this cluster
+        level (int): recursion depth
+        remaining (list): particles yet to be visited in this search
+
+    Returns:
+        completed (bool): returns True if traversal completed or False if interrupted
+    """
     if level >= sys.getrecursionlimit()/2:
         return False
     idx = int(np.argwhere(particles==i))
@@ -32,6 +46,16 @@ def visit(i,snap,particles,visited,members,level,remaining):
     return True
 
 def largest_clusters(snap,library,thresh=None):
+    R""" find largest clusters of same signature in Snapshot
+
+    Args:
+        snap (Snapshot): Snapshot containing particle data
+        library (Library): Library for signature lookup
+        thresh (float,optional): distance to consider identical in graph space (default 0)
+
+    Returns:
+        sizes (array): maximum cluster sizes of all signatures in Library
+    """
     sizes = []
     if thresh is not None:
         dat = []
@@ -65,6 +89,16 @@ def largest_clusters(snap,library,thresh=None):
     return np.array(sizes)
 
 def shell(i,NL,n):
+    R""" find particle neighbors in a given number of shells
+
+    Args:
+        i (int): particle index
+        NL (list of lists): neighbor list to search
+        n (int): number of neighbor shells
+
+    Returns:
+        idx (array): indices of particle neighbors
+    """
     idx = NL[i].flatten()
     s = 1
     while s < n:
@@ -76,8 +110,17 @@ def shell(i,NL,n):
         s += 1
     return idx
 
-# builds an adjacency matrix from the nearest neighbor list
 def particleAdjacency(i, NL, n=1):
+    R""" builds adjacency matrix for local neighborhood from global neighbor list
+
+    Args:
+        i (int): particle index
+        NL (list of lists): neighbor list to search
+        n (int,optional): number of neighbor shells to consider (default 1)
+
+    Returns:
+        A (array): adjacency matrix
+    """
     idx = shell(i,NL,n)
     idx = np.hstack(([i],np.sort(idx[idx!=i]))) # enforce deterministic ordering
     n = len(idx)
@@ -94,6 +137,12 @@ def particleAdjacency(i, NL, n=1):
     return A
 
 class Network:
+    R""" consider the entire Snapshot as a single connected network
+
+    Args:
+        snap (Snapshot): Snapshot to evaluate
+        k (int,optional): maximum graphlet size (default 5)
+    """
     def __init__(self,snap,k=5):
         A = np.zeros((snap.N,snap.N),np.int8)
         for i, nn in enumerate(snap.neighbors):
@@ -130,6 +179,14 @@ class Network:
         return (self.gdv[self.i],self.ngdv[self.i])
 
 class NeighborList:
+    R""" virtual class for building neighbor lists from Snapshot data
+
+    Args:
+        enforce_symmetry (bool,optional): should the list be checked for symmetry? (default True)
+        max_neighbors (int,optional): particles with more than this number of neighbors
+                                      will be assigned an empty neighborhood (default None)
+
+    """
     def __init__(self,enforce_symmetry=True,max_neighbors=None):
         self.enforce_symmetry = enforce_symmetry
         self.max_neighbors = max_neighbors
@@ -139,23 +196,50 @@ class NeighborList:
     def getNeighbors(self,snap):
         return [], []
     def symmetrize(self,NL):
+        R""" force the supplied neighbor list to be symmetrical (using OR logic)
+
+        Args:
+            NL (list of lists): neighbor list to search
+        """
         for i, nn in enumerate(NL):
             for j in nn:
                 if i not in NL[j]:
                     NL[j] = np.append(NL[j],i)
     def removeOverbonded(self,NL):
+        R""" assign empty neighborhood to overbonded particles
+
+        Args:
+            NL (list of lists): neighbor list to search
+        """
         for i, nn in enumerate(NL):
             if len(nn) > self.max_neighbors+1:
                 NL[i] = np.array([i])
                 for j in nn:
                     NL[j] = np.delete(NL[j],np.argwhere(NL[j]==i))
     def getAdjacency(self,snap):
+        R""" build adjacency matrix for each particle in Snapshot
+
+        Args:
+           snap (Snapshot): Snapshot to consider
+
+        Returns:
+           adjacency (list of arrays): adjacency matrices
+        """
         adjacency = []
         for i in range(snap.N):
                 adjacency.append(self.particleAdjacency(i,snap.neighbors))
         return adjacency
 
 class Voronoi(NeighborList):
+    R""" build a neighbor list using Voro++ library with some optional additional filtering
+
+    Args:
+        r_max (float,optional): maximum radius to consider adjacent, aboslute (default None)
+        r_max_multiple (float,optional): maximum radius to consider adjacent, ratio of first-nearest-neighbor (default None)
+        clustering (bool,optional): should hierarchical clustering be performed? (default True)
+        cluster_method (str,optional): distance method for scipy.hierarchy (default 'centroid')
+        cluster_ratio (float,optional): ratio of first-nearest-neighbor distance to use for cutoff (default 0.25)
+    """
     def setParams(self,r_max=None,r_max_multiple=None,
                   clustering=True,cluster_method='centroid',cluster_ratio=0.25):
         self.r_max = r_max
@@ -165,6 +249,12 @@ class Voronoi(NeighborList):
         self.cluster_ratio = cluster_ratio
     # filter neighbors by hierarchical clustering
     def filterNeighbors(self,nl_idx,snap_idx,neighbors,snap):
+        R"""
+
+        Args:
+
+        Returns:
+        """
         # get neighbors from triangulation
         nn = np.array(neighbors[nl_idx],dtype=np.int)
         n_voro = len(nn)
@@ -212,6 +302,14 @@ class Voronoi(NeighborList):
         return np.hstack((snap_idx,nn[h_base]))
     # compute Delaunay triangulation with Voro++ library
     def getNeighbors(self,snap):
+        R""" loop through particles in Snapshot and get their topological neighbors
+
+        Args:
+            snap (Snapshot): snapshot to analyze
+
+        Returns:
+            neighbors (list of lists): neighbors of each particle
+        """
         # build all-atom neighborlist with Voro++
         nl = _crayon.voropp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
         all_neighbors = []
