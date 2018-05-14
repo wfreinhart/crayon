@@ -231,6 +231,11 @@ class NeighborList:
         return adjacency
 
 class Cutoff(NeighborList):
+    R""" build a neighbor list using a fixed cutoff radius
+
+    Args:
+        r_cut (float): the cutoff radius
+    """
     def setParams(self,rcut=None):
         if rcut is not None:
             self.rcut = rcut
@@ -246,6 +251,11 @@ class Cutoff(NeighborList):
         return nl
 
 class Hybrid(NeighborList):
+    R""" build a neighbor list with a fixed cutoff radius but filtered by Voronoi face area (work in progress)
+
+    Args:
+        r_cut (float): the cutoff radius
+    """
     def setParams(self,rcut=None):
         if rcut is not None:
             self.rcut = rcut
