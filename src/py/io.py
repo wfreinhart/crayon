@@ -27,6 +27,15 @@ except:
     foundGSD = False
 
 def readXYZ(filename):
+    R""" read an XYZ snapshot from file
+
+    Args:
+        filename (str): filename to read
+
+    Returns:
+        xyz (array): particle positions
+        box (array): box dimensions
+    """
     # read values from file
     with open(filename,'r') as config:
         lines = config.readlines()
@@ -43,6 +52,15 @@ def readXYZ(filename):
     return xyz, box
 
 def readXML(filename):
+    R""" read an XML snapshot from file
+
+    Args:
+        filename (str): filename to read
+
+    Returns:
+        xyz (array): particle positions
+        box (array): box dimensions
+    """
     if not foundETree:
         raise RuntimeError('xml.etree.ElementTree module not found')
     # read values from file
@@ -62,6 +80,16 @@ def readXML(filename):
     return xyz, box
 
 def readGSD(filename,frame):
+    R""" read a GSD snapshot from file
+
+    Args:
+        filename (str): filename to read
+        frame (int): frame of GSD trajectory to read
+
+    Returns:
+        xyz (array): particle positions
+        box (array): box dimensions
+    """
     if not foundGSD:
         raise RuntimeError('GSD module not found')
     # read trajectory from gsd file
@@ -74,18 +102,33 @@ def readGSD(filename,frame):
     return xyz, box
 
 def readListParallel(filename):
+    R""" read a list from file using ParallelTask,
+         lines with leading # are ignored
+
+    Args:
+        filename (str): filename to read
+
+    Returns:
+        entries (list): list of entries in the file
+    """
     p = parallel.ParallelTask()
     comm, size, rank, master = parallel.info()
-    filenames = None
+    entries = None
     if master:
         with open(filename,'r') as fid:
             lines = fid.readlines()
-        filenames = [x.strip() for x in lines]
-        filenames = [x for x in filenames if x[0] != '#']
-    filenames = p.shareData(filenames)
-    return filenames
+        entries = [x.strip() for x in lines]
+        entries = [x for x in entries if x[0] != '#']
+    entries = p.shareData(entries)
+    return entries
 
 def writeXYZ(filename,snap):
+    R""" write an XYZ snapshot to file
+
+    Args:
+        filename (str): filename to write
+        snap (Snapshot): Snapshot data to write
+    """
     fid = open(filename,'w+')
     print('%d'%snap.N,file=fid)
     print('Lattice="%.6f 0.0 0.0 0.0 %.6f 0.0 0.0 0.0 %.6f"'%tuple(snap.box),file=fid)
@@ -94,6 +137,12 @@ def writeXYZ(filename,snap):
     fid.close()
 
 def writeXML(filename,snap,bonds=False):
+    R""" write an XML snapshot to file
+
+    Args:
+        filename (str): filename to write
+        snap (Snapshot): Snapshot data to write
+    """
     fid = open(filename,'w+')
     print('<?xml version="1.0" encoding="UTF-8"?>',file=fid)
     print('<hoomd_xml version="1.7">',file=fid)

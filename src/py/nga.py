@@ -25,10 +25,9 @@ class Snapshot:
          neighborlist generation and graph library construction
 
     Args:
-        reader_input (tuple): the input tuple for the reader function
-        reader (function): takes (Snapshot,reader_input) as input and
-                           sets Snapshot.N, Snapshot.box, and Snapshot.xyz
-        nl (crayon::Neighborlist): a neighborlist generation class
+        xyz (array): `Nx3` array containing `xyz` coordinates of particles
+        box (array): box dimensions (`Lx,Ly,Lz`)
+        nl (NeighborList): reference to a class capable of building the neighbor list
         pbc (str) (optional): dimensions with periodic boundaries (defaults to 'xyz')
     """
     def __init__(self,xyz=None,box=None,nl=None,pbc='xyz'):
@@ -71,13 +70,24 @@ class Snapshot:
                     self.xyz[:,i] = 0.
                     self.pbc = self.pbc.replace(dims[i],'')
     def buildNeighborhoods(self):
+        R""" requests neighborhoods from the supplied NeighborList class
+        """
         self.neighbors = self.nl.getNeighbors(self)
     def buildAdjacency(self):
+        R""" build adjacency matrices from pre-computed neighbors
+        """
+        if self.neighbors is None:
+            self.buildNeighborhoods()
         if self.global_mode:
             self.adjacency = neighborlist.Network(self,k=self.graphlet_k)
         else:
             self.adjacency = _crayon.buildGraphs(self.neighbors,self.n_shells)
     def parseOptions(self,options):
+        R"""
+
+        Args:
+            options (dictionary): kwargs from buildLibrary()
+        """
         # use a global Network instead of local Neighborhoods?
         if 'global_mode' in options:
             self.global_mode = options['global_mode']
@@ -94,6 +104,16 @@ class Snapshot:
         if 'n_shells' in options:
             self.n_shells = options['n_shells']
     def buildLibrary(self,**kwargs):
+        R""" build a GraphLibrary from all Graphs observed in this Snapshot
+
+        Args:
+            global_mode (bool,optional): use the graphlet decomposition from the entire graph? (default False)
+            n_shells (int, optional): number of shells to include in the neighborhoods (default 1)
+            graphlet_k (int,optional): maximum graphlet size (default 5)
+            cluster (bool,optional): use hierarchical clustering in the NeighborList? (default True)
+            cluster_thresh (float,optional): fractional distance between clusters in hierarchical clustering (default 0.25)
+
+        """
         self.parseOptions(kwargs)
         self.library = classifiers.GraphLibrary()
         if self.adjacency is None:
@@ -104,16 +124,39 @@ class Snapshot:
         if self.cluster:
             self.library.sizes = neighborlist.largest_clusters(self,self.library,self.cluster_thresh)
     def mapTo(self,library):
+        R""" obtain a mapping between the Snapshot's GraphLibrary and another GraphLibrary
+
+        Args:
+            library (Library): the Library to map particles onto
+
+        Returns:
+            m (array): the index of each particle in the provided Library
+        """
         m = np.zeros(self.N,dtype=np.int) * np.nan
         for sig, idx in self.library.lookup.items():
             if sig in library.index:
                 m[idx] = library.index[sig]
         return m
     def wrap(self,v):
+        R""" wrap vectors into the periodic simulation box (respecting non-periodic directions)
+
+        Args:
+            v (array): array of vectors to wrap into the box
+
+        Returns:
+            w (array): array of wrapped vectors
+        """
         pbc = np.asarray([dim in self.pbc for dim in 'xyz'],dtype=np.float)
         w = v - self.box * np.round( v / self.box * pbc)
         return w
     def save(self,filename,neighbors=False,library=False):
+        R""" save info from the Snapshot as a pickle binary
+
+        Args:
+            filename (str): filename to save as
+            neighbors (bool,optional): save neighborlist? (default False)
+            library (bool,optional): save GraphLibrary? (default False)
+        """
         buff = {}
         if neighbors:
             buff['neighbors'] = self.neighbors
@@ -122,6 +165,11 @@ class Snapshot:
         with open(filename,'wb') as fid:
             pickle.dump(buff,fid)
     def load(self,filename):
+        R""" load pre-computed info from a pickle binary
+
+        Args:
+            filename (str): filename to load
+        """
         with open(filename,'rb') as fid:
             buff = pickle.load(fid)
         if 'neighbors' in buff:
@@ -131,8 +179,14 @@ class Snapshot:
             self.library = buff['library']
 
 class Ensemble:
+    R""" handles collection and combination of Snapshots into single DMap,
+         including many operations in parallel (when enabled)
+
+    Args:
+        **kwargs to be passed to Snapshot::buildLibrary()
+    """
     def __init__(self,**kwargs):
-        # evaluate optoins
+        # evaluate options
         self.options = kwargs
         # set default values
         self.filenames = []
@@ -146,21 +200,36 @@ class Ensemble:
         self.color_rotation = None
         self.comm, self.size, self.rank, self.master = parallel.info()
         self.p = parallel.ParallelTask()
-    def insert(self,idx,snap):
+    def insert(self,key,snap):
+        R""" insert a Snapshot into the Ensemble, automatically checks if the GraphLibrary
+             has been built and calls Snapshot::buildLibrary() if it has not
+
+        Args:
+            key (hashable): a hashable key identifying this Snapshot in the graph_lookups dictionary
+            snap (Snapshot): the Snapshot object to insert
+        """
         if snap.library is None:
             snap.buildLibrary(**self.options)
         self.library.collect(snap.library)
-        self.graph_lookups[idx] = snap.library.lookup
-    def backmap(self,idx):
-        N = 0
-        for sig, idx in self.graph_lookups[idx].items():
-            N += len(val)
+        self.graph_lookups[key] = snap.library.lookup
+    def backmap(self,key):
+        R""" obtain a mapping between the particles in a Snapshot and the Ensemble-wide GraphLibrary
+
+        Args:
+            key (hashable): the hashable key identifying this Snapshot in the graph_lookups dictionary
+
+        Returns:
+            m (array): the index of each particle in the Ensemble-wide GraphLibrary
+        """
+        N = np.sum(np.asarray([len(val) for key, val in lookups[f].items()]))
         m = np.zeros(N,dtype=np.int) * np.nan
-        for sig, idx in self.graph_lookups[idx].items():
+        for sig, idx in self.graph_lookups[key].items():
             if sig in self.library.index:
                 m[idx] = self.library.index[sig]
         return np.array(m,dtype=np.int)
     def collect(self):
+    R""" query, obtain, and merge Ensembles constructed in parallel (using ParallelTask class)
+    """
         others = self.p.gatherData(self)
         if not self.master:
             return
@@ -178,25 +247,29 @@ class Ensemble:
                     print('Warning: duplicate graph lookup key detected during Ensemble.collect')
                 self.graph_lookups[key] = val
         print('ensemble graph collection complete, found %d unique graphs'%len(self.library.items))
-    def prune(self,num_random=None,num_top=None,min_freq=None,min_percentile=None,mode='frequency'):
+    def prune(self,freq_top=None,freq_thresh=None,freq_pct=None,
+                   size_top=None,size_thresh=None,size_pct=None,
+                   random=None):
+    R""" choose landmark signatures for building the DMap based on various relevance metrics
+
+    Args:
+        freq_top (int,optional): number of most frequent signatures
+        freq_thresh (int,optional): frequency threshold
+        freq_pct (int,optional): frequency percentile threshold
+        size_top (int,optional): number of largest clusters with same signature
+        size_thresh (int,optional): cluster size threshold
+        size_pct (int,optional): cluster size percentile threshold
+        random (int,optional): number of random signatures (helps fill sample space)
+    """
         if not self.master:
             return
-        library = self.library
-        if mode == 'frequency':
-            vals = library.counts
-        elif mode == 'clustersize':
-            vals = library.sizes
-        else:
-            raise ValueError('must specify a valid mode (frequency of clustersize)')
         self.lm_idx = np.array([])
-        if num_top is not None:
-            self.lm_idx = np.sort(np.argsort(vals)[::-1][:num_top]).flatten()
-        elif min_freq is not None:
-            self.lm_idx = np.argwhere(vals >= min_freq).flatten()
+        if freq_top is not None:
+            self.lm_idx = np.sort(np.argsort(library.counts)[::-1][:freq_top]).flatten()
+        elif freq_thresh is not None:
+            self.lm_idx = np.argwhere(library.counts >= freq_thresh).flatten()
         elif min_percentile is not None:
-            self.lm_idx = np.argwhere(vals >= np.percentile(vals,min_percentile)).flatten()
-        else:
-            raise RuntimeError('must supply either num_landmarks or min_freq')
+            self.lm_idx = np.argwhere(library.counts >= np.percentile(library.counts,min_percentile)).flatten()
         if num_random is not None:
             remaining = range(len(vals))
             for idx in self.lm_idx:
@@ -208,6 +281,8 @@ class Ensemble:
         self.lm_sigs = [library.sigs[idx] for idx in self.lm_idx]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
     def computeDists(self):
+        R""" compute distances between graphlet signatures, using landmarks if Ensemble.lm_idx has been set
+        """
         if not self.master:
             return
         # prepare NGDVs for distance calculation
@@ -226,6 +301,13 @@ class Ensemble:
         for i, lm in enumerate(self.lm_idx):
             self.dists[:,i] = np.linalg.norm(dat-dat[lm],axis=1)
     def detectDistOutliers(self,mode=None,thresh=None):
+        R""" detect outliers in the distance matrix using either agglomerative
+             clustering or simple cutoff
+
+        Args:
+            mode (str): 'agglomerative' or 'cutoff'
+            thresh (float): threshold for clustering or cutoff
+        """
         if self.master:
             # detect outliers, if requested
             if mode == 'agglomerative':
@@ -256,25 +338,18 @@ class Ensemble:
                 d = np.min(self.dists,axis=1)
                 self.valid_rows = np.argwhere(d < thresh).flatten()
                 self.invalid_rows = np.argwhere(d >= thresh).flatten()
-    def getFrameMaps(self):
-        lookups = self.graph_lookups
-        library = self.library
-        frames = lookups.keys()
-        frame_maps = {}
-        for f in frames:
-            N = np.sum(np.asarray([len(val) for key, val in lookups[f].items()]))
-            frame_data = np.zeros(N,dtype=np.int)
-            for key, val in lookups[f].items():
-                frame_data[np.asarray(val,dtype=np.int)] = library.index[key]
-            frame_maps[f] = frame_data
-        return frame_maps
     def writeColors(self):
+        R""" write color of each particle to file, in the order they appear in each Snapshot
+             column 1 is signature index, columns 2-4 are RGB values
+        """
         # share data among workers
         frame_maps = None
         color_coords = None
         if self.master:
             color_coords = np.copy(self.dmap.color_coords)
-            frame_maps = self.getFrameMaps()
+            frame_maps = {}
+            for key in self.graph_lookups.keys():
+                frame_maps[key] = self.backmap(key)
         color_coords = self.p.shareData(color_coords)
         frame_maps = self.p.shareData(frame_maps)
         # map local structure indices to ensemble
@@ -283,8 +358,6 @@ class Ensemble:
         local_file_idx  = parallel.partition(range(len(keys)))
         for f in local_file_idx:
             filename = keys[f]
-            # snap = Snapshot()
-            # snap.load(filename + '.nga')
             fm = frame_maps[keys[f]].reshape(-1,1)
             cc = color_coords[fm,np.array([1,2,3])]
             if self.color_rotation is not None:
@@ -297,13 +370,25 @@ class Ensemble:
             #     fm[fm==inv] = -1
             fdat = np.hstack((fm,cc))
             np.savetxt(filename + '.cmap', fdat)
-    def buildDMap(self,freq=None):
+    def buildDMap(self):
+        R""" builds the diffusion map from pre-computed distances (computes them if necessary)
+        """
         if self.master:
+            if self.dists is None:
+                if self.lm_idx is None:
+                    print('Warning: computing pairwise distance matrix between ALL signatures')
+                self.computeDists()
             self.dmap.build(self.dists,landmarks=self.lm_idx,
                             valid_cols=self.valid_cols,
                             valid_rows=self.valid_rows)
             print('Diffusion map construction complete')
     def makeSnapshot(self,filename):
+        R""" create a Snapshot (in XYZ format) containing the low-dimensional manifold
+             obtained from diffusion maps, along the corresponding color map
+
+        Args:
+            filename (str): filename to save as
+        """
         if not self.master:
             return
         cd = np.copy(self.dmap.coords[:,1:4])
