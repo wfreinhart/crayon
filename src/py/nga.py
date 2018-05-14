@@ -228,8 +228,7 @@ class Ensemble:
                 m[idx] = self.library.index[sig]
         return np.array(m,dtype=np.int)
     def collect(self):
-    R""" query, obtain, and merge Ensembles constructed in parallel (using ParallelTask class)
-    """
+        R""" query, obtain, and merge Ensembles constructed in parallel (using ParallelTask class) """
         others = self.p.gatherData(self)
         if not self.master:
             return
@@ -250,17 +249,17 @@ class Ensemble:
     def prune(self,freq_top=None,freq_thresh=None,freq_pct=None,
                    size_top=None,size_thresh=None,size_pct=None,
                    random=None):
-    R""" choose landmark signatures for building the DMap based on various relevance metrics
+        R""" choose landmark signatures for building the DMap based on various relevance metrics
 
-    Args:
-        freq_top (int,optional): number of most frequent signatures
-        freq_thresh (int,optional): frequency threshold
-        freq_pct (int,optional): frequency percentile threshold
-        size_top (int,optional): number of largest clusters with same signature
-        size_thresh (int,optional): cluster size threshold
-        size_pct (int,optional): cluster size percentile threshold
-        random (int,optional): number of random signatures (helps fill sample space)
-    """
+        Args:
+            freq_top (int,optional): number of most frequent signatures
+            freq_thresh (int,optional): frequency threshold
+            freq_pct (int,optional): frequency percentile threshold
+            size_top (int,optional): number of largest clusters with same signature
+            size_thresh (int,optional): cluster size threshold
+            size_pct (int,optional): cluster size percentile threshold
+            random (int,optional): number of random signatures (helps fill sample space)
+        """
         if not self.master:
             return
         self.lm_idx = np.array([])
@@ -281,8 +280,7 @@ class Ensemble:
         self.lm_sigs = [library.sigs[idx] for idx in self.lm_idx]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
     def computeDists(self):
-        R""" compute distances between graphlet signatures, using landmarks if Ensemble.lm_idx has been set
-        """
+        R""" compute distances between graphlet signatures, using landmarks if Ensemble.lm_idx has been set """
         if not self.master:
             return
         # prepare NGDVs for distance calculation
@@ -371,8 +369,7 @@ class Ensemble:
             fdat = np.hstack((fm,cc))
             np.savetxt(filename + '.cmap', fdat)
     def buildDMap(self):
-        R""" builds the diffusion map from pre-computed distances (computes them if necessary)
-        """
+        R""" builds the diffusion map from pre-computed distances (computes them if necessary) """
         if self.master:
             if self.dists is None:
                 if self.lm_idx is None:

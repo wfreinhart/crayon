@@ -230,6 +230,68 @@ class NeighborList:
                 adjacency.append(self.particleAdjacency(i,snap.neighbors))
         return adjacency
 
+class Cutoff(NeighborList):
+    R""" build a neighbor list using a fixed cutoff radius
+
+    Args:
+        r_cut (float): the cutoff radius
+    """
+    def setParams(self,rcut=None):
+        if rcut is not None:
+            self.rcut = rcut
+    def getNeighbors(self,snap):
+        cell = _crayon.cellpp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc, self.rcut)
+        nl = []
+        for i in range(snap.N):
+            # sort cell list result
+            cc = cell[i]
+            dvec = snap.wrap(snap.xyz[cc] - snap.xyz[i])
+            d = np.sqrt(np.sum(dvec**2.,axis=1))
+            nl.append(cc[d<=self.rcut])
+        return nl
+
+class Hybrid(NeighborList):
+    R""" build a neighbor list with a fixed cutoff radius but filtered by Voronoi face area (work in progress)
+
+    Args:
+        r_cut (float): the cutoff radius
+    """
+    def setParams(self,rcut=None):
+        if rcut is not None:
+            self.rcut = rcut
+    def getNeighbors(self,snap):
+        # build all-atom neighborlist with Voro++
+        voro, area = _crayon.voropp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
+        cell = _crayon.cellpp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc, self.rcut)
+        nl = []
+        for i in range(snap.N):
+            # sort voro result
+            vv = np.hstack((i,np.array(voro[i])))
+            av = np.hstack((np.inf,np.array(area[i])))
+            dvec = snap.wrap(snap.xyz[vv] - snap.xyz[i])
+            dv = np.sqrt(np.sum(dvec**2.,axis=1))
+            o = np.argsort(dv)
+            o = o[dv[o]<=rcut]
+            vv = vv[o]
+            av = av[o]
+            dv = dv[o]
+            f = av / np.sum(av[1:])
+            t = 1. / len(f) / 10.
+            vv = vv[f>t]
+            # sort cell list result
+            cc = cell[i]
+            dvec = snap.wrap(snap.xyz[cc] - snap.xyz[i])
+            dc = np.sqrt(np.sum(dvec**2.,axis=1))
+            o = np.argsort(dc)
+            dc = dc[o]
+            cc = cc[o][dc<=self.rcut]
+            dc = dc[dc<=self.rcut]
+            # compare
+            n = min(len(vv),len(cc))
+            ndiv = np.searchsorted(cc[:n] != vv[:n],True)
+            nl.append(cc[d<=d[ndiv-1]])
+        return nl
+
 class Voronoi(NeighborList):
     R""" build a neighbor list using Voro++ library with some optional additional filtering
 
@@ -311,7 +373,7 @@ class Voronoi(NeighborList):
             neighbors (list of lists): neighbors of each particle
         """
         # build all-atom neighborlist with Voro++
-        nl = _crayon.voropp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
+        nl, area = _crayon.voropp(snap.xyz, snap.box, 'x' in snap.pbc, 'y' in snap.pbc, 'z' in snap.pbc)
         all_neighbors = []
         for idx in range(snap.N):
             if self.clustering:

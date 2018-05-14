@@ -19,8 +19,7 @@ except:
     raise RuntimeError('dmap submodule requires PyDMap python module')
 
 class DMap:
-     R""" container for computing diffusion maps from Ensembles of Snapshots
-     """
+    R""" container for computing diffusion maps from Ensembles of Snapshots """
     def __init__(self):
         self._cpp = PyDMap.DMap()
         self.alpha = 1.0
