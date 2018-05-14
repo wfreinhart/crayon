@@ -212,7 +212,7 @@ class Ensemble:
             snap.buildLibrary(**self.options)
         self.library.collect(snap.library)
         self.graph_lookups[key] = snap.library.lookup
-    def backmap(self,key):
+    def backmap(self,snapkey):
         R""" obtain a mapping between the particles in a Snapshot and the Ensemble-wide GraphLibrary
 
         Args:
@@ -221,9 +221,9 @@ class Ensemble:
         Returns:
             m (array): the index of each particle in the Ensemble-wide GraphLibrary
         """
-        N = np.sum(np.asarray([len(val) for key, val in lookups[f].items()]))
+        N = np.sum(np.asarray([len(val) for key, val in self.graph_lookups[snapkey].items()]))
         m = np.zeros(N,dtype=np.int) * np.nan
-        for sig, idx in self.graph_lookups[key].items():
+        for sig, idx in self.graph_lookups[snapkey].items():
             if sig in self.library.index:
                 m[idx] = self.library.index[sig]
         return np.array(m,dtype=np.int)
@@ -262,22 +262,30 @@ class Ensemble:
         """
         if not self.master:
             return
-        self.lm_idx = np.array([])
+        self.lm_idx = np.array([],dtype=np.int)
         if freq_top is not None:
-            self.lm_idx = np.sort(np.argsort(library.counts)[::-1][:freq_top]).flatten()
-        elif freq_thresh is not None:
-            self.lm_idx = np.argwhere(library.counts >= freq_thresh).flatten()
-        elif min_percentile is not None:
-            self.lm_idx = np.argwhere(library.counts >= np.percentile(library.counts,min_percentile)).flatten()
-        if num_random is not None:
+            self.lm_idx = np.hstack((self.lm_idx,np.sort(np.argsort(self.library.counts)[::-1][:freq_top]).flatten()))
+        if freq_thresh is not None:
+            self.lm_idx = np.hstack((self.lm_idx,np.argwhere(self.library.counts >= freq_thresh).flatten()))
+        if size_pct is not None:
+            self.lm_idx = np.hstack((self.lm_idx,np.argwhere(self.library.counts >= np.percentile(self.library.counts,min_percentile)).flatten()))
+        if size_top is not None:
+            self.lm_idx = np.hstack((self.lm_idx,np.sort(np.argsort(self.library.sizes)[::-1][:freq_top]).flatten()))
+        if size_thresh is not None:
+            self.lm_idx = np.hstack((self.lm_idx,np.argwhere(self.library.sizes >= freq_thresh).flatten()))
+        if size_pct is not None:
+            self.lm_idx = np.hstack((self.lm_idx,np.argwhere(self.library.sizes >= np.percentile(self.library.counts,min_percentile)).flatten()))
+        self.lm_idx = np.unique(self.lm_idx)
+        if random is not None:
             remaining = range(len(vals))
             for idx in self.lm_idx:
                 remaining.remove(idx)
             random = np.random.choice(remaining,num_random)
             self.lm_idx = np.unique(np.hstack((self.lm_idx,random)))
-        n = len(library.sigs)
+        self.lm_idx = np.unique(self.lm_idx)
+        n = len(self.library.sigs)
         m = len(self.lm_idx)
-        self.lm_sigs = [library.sigs[idx] for idx in self.lm_idx]
+        self.lm_sigs = [self.library.sigs[idx] for idx in self.lm_idx]
         print('using %d archetypal graphs as landmarks for %d less common ones'%(m,n-m))
     def computeDists(self):
         R""" compute distances between graphlet signatures, using landmarks if Ensemble.lm_idx has been set """
