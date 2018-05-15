@@ -11,7 +11,7 @@ import pickle
 import numpy as np
 
 from crayon import parallel
-from crayon import color
+from crayon import util
 
 try:
     import PyDMap
@@ -81,7 +81,7 @@ class DMap:
         else:
             R = self.evecs_ny
         self.coords = R
-        self.color_coords = color.rankTransform(R)
+        self.color_coords = util.rankTransform(R)
         # first eigenvector is always trivial
         self.color_coords[:,0] = 0.5
         # catch nan rows

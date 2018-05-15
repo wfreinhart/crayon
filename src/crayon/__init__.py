@@ -5,8 +5,7 @@
 # Copyright (c) 2018 Wesley Reinhart.
 # This file is part of the crayon project, released under the Modified BSD License.
 
-from crayon import _crayon
-import color
+import _crayon
 import classifiers
 try:
     import dmap

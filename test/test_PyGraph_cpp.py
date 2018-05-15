@@ -24,7 +24,7 @@ import unittest
 class TestPyGraph(unittest.TestCase):
     # run this every time
     def setUp(self):
-        self.aList = [_crayon.graph(A) for A in AList]
+        self.aList = [_crayon.neighborhood(A) for A in AList]
 
     # test adjacency matrix assignment and retrieval
     def testAdj(self):
@@ -46,18 +46,18 @@ class TestPyGraph(unittest.TestCase):
 class ValidatePyGraph(unittest.TestCase):
     # run this every time
     def setUp(self):
-        self.aList = [_crayon.graph(A) for A in AList]
+        self.aList = [_crayon.neighborhood(A) for A in AList]
 
     # test GDV validity
     def testValidateGDV(self):
         for i in range(len(AList)):
-            gdv = np.loadtxt('/home/wfr/crayon/test/gdv/%d.txt'%(i+1))
+            gdv = np.loadtxt(test_path + '/gdv/%d.txt'%(i+1))
             np.testing.assert_array_equal(gdv,self.aList[i].gdv())
 
     # test GDD validity
     def testValidateGDD(self):
         for i in range(len(AList)):
-            gdd = load_uneven('/home/wfr/crayon/test/gdd/%d.txt'%(i+1))
+            gdd = load_uneven(test_path + '/gdd/%d.txt'%(i+1))
             np.testing.assert_array_equal(gdd,self.aList[i].gdd())
 
 if __name__ == "__main__":

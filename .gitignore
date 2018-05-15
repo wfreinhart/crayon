@@ -2,3 +2,4 @@ build/
 crayon/
 *.pyc
 CMakeCache.txt
+!src/crayon/

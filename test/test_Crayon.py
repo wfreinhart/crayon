@@ -15,7 +15,7 @@ src_path = test_path[:test_path.rfind('/test')] + '/src'
 import sys
 sys.path.insert(0,build_path)
 sys.path.insert(0,src_path)
-import py as crayon
+import crayon
 
 sys.path.insert(0,test_path)
 

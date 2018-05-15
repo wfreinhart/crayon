@@ -7,7 +7,7 @@
 
 from __future__ import print_function
 
-from crayon import _crayon
+import _crayon
 
 import numpy as np
 

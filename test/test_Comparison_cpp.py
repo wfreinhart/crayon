@@ -24,7 +24,7 @@ import unittest
 class ValidateComparison(unittest.TestCase):
     # run this every time
     def setUp(self):
-        self.aList = [_crayon.graph(A) for A in AList]
+        self.aList = [_crayon.neighborhood(A) for A in AList]
 
     # test pairwise GDV similarity validity
     def testValidateGDVS(self):
@@ -34,10 +34,10 @@ class ValidateComparison(unittest.TestCase):
                 B_gdv = self.aList[j].gdv()
                 # test gdv similarity
                 n = len(AList[i]) * len(AList[j])
-                gdvs = np.loadtxt('/home/wfr/crayon/test/gdvs/gdvs-%d-%d.txt'%(i+1,j+1))
+                gdvs = np.loadtxt(test_path + '/gdvs/gdvs-%d-%d.txt'%(i+1,j+1))
                 V = np.zeros((len(AList[i]),len(AList[j])))
                 for k in range(len(gdvs)):
-                    V[gdvs[k,0]-1,gdvs[k,1]-1] = gdvs[k,2]
+                    V[int(gdvs[k,0]-1),int(gdvs[k,1]-1)] = gdvs[k,2]
                 S = np.zeros((len(AList[i]),len(AList[j])))
                 # compare each node in the graph
                 for l in range(len(AList[i])):
@@ -60,7 +60,7 @@ class ValidateComparison(unittest.TestCase):
             for j in range(len(AList)):
                 B_gdd = self.aList[j].gdd()
                 # test gdd agreement
-                gdda = np.loadtxt('/home/wfr/crayon/test/gdda/gdda-%d-%d.txt'%(i+1,j+1))
+                gdda = np.loadtxt(test_path + '/gdda/gdda-%d-%d.txt'%(i+1,j+1))
                 n = np.max((A_gdd.shape[1],B_gdd.shape[1]))
                 S_A = np.hstack((A_gdd,np.zeros((A_gdd.shape[0],n-A_gdd.shape[1]))))
                 N_A = np.zeros(S_A.shape)

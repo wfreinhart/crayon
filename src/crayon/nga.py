@@ -12,9 +12,9 @@ from crayon import _crayon
 from crayon import classifiers
 from crayon import parallel
 from crayon import neighborlist
-from crayon import color
 from crayon import dmap
 from crayon import io
+from crayon import util
 
 import numpy as np
 from scipy.cluster import hierarchy
@@ -267,14 +267,14 @@ class Ensemble:
             self.lm_idx = np.hstack((self.lm_idx,np.sort(np.argsort(self.library.counts)[::-1][:freq_top]).flatten()))
         if freq_thresh is not None:
             self.lm_idx = np.hstack((self.lm_idx,np.argwhere(self.library.counts >= freq_thresh).flatten()))
-        if size_pct is not None:
-            self.lm_idx = np.hstack((self.lm_idx,np.argwhere(self.library.counts >= np.percentile(self.library.counts,min_percentile)).flatten()))
+        if freq_pct is not None:
+            self.lm_idx = np.hstack((self.lm_idx,np.argwhere(self.library.counts >= np.percentile(self.library.counts,freq_pct)).flatten()))
         if size_top is not None:
             self.lm_idx = np.hstack((self.lm_idx,np.sort(np.argsort(self.library.sizes)[::-1][:freq_top]).flatten()))
         if size_thresh is not None:
             self.lm_idx = np.hstack((self.lm_idx,np.argwhere(self.library.sizes >= freq_thresh).flatten()))
         if size_pct is not None:
-            self.lm_idx = np.hstack((self.lm_idx,np.argwhere(self.library.sizes >= np.percentile(self.library.counts,min_percentile)).flatten()))
+            self.lm_idx = np.hstack((self.lm_idx,np.argwhere(self.library.sizes >= np.percentile(self.library.counts,size_pct)).flatten()))
         self.lm_idx = np.unique(self.lm_idx)
         if random is not None:
             remaining = range(len(vals))
@@ -370,7 +370,7 @@ class Ensemble:
                 if type(self.color_rotation) == tuple:
                     self.color_rotation = [self.color_rotation]
                 for rot in self.color_rotation:
-                    cc = color.rotate(cc,rot[0],rot[1])
+                    cc = util.rotate(cc,rot[0],rot[1])
             # need to distribute invalid_rows across ranks
             # for inv in self.invalid_rows:
             #     fm[fm==inv] = -1
@@ -402,7 +402,7 @@ class Ensemble:
             if type(self.color_rotation) == tuple:
                 self.color_rotation = [self.color_rotation]
             for rot in self.color_rotation:
-                cc = color.rotate(cc,rot[0],rot[1])
+                cc = util.rotate(cc,rot[0],rot[1])
         # find bounds
         box = 2.*np.max(np.abs(cd),axis=0)
         snap = Snapshot()

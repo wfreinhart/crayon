@@ -87,7 +87,7 @@ install(TARGETS orca DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS graphlet DESTINATION "${CRAYON_DEST}/lib")
 install(TARGETS crayon DESTINATION ${CRAYON_DEST})
 # install python module
-file(GLOB SRC_PY "src/py/*.py")
+file(GLOB SRC_PY "src/crayon/*.py")
 install(FILES ${SRC_PY} DESTINATION ${CRAYON_DEST})
 
 #==================================================
