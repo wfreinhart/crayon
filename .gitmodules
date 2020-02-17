@@ -4,6 +4,3 @@
 [submodule "libgraphlet"]
 	path = libgraphlet
 	url = https://github.com/SimonLarsen/libgraphlet.git
-[submodule "eigen"]
-	path = eigen
-	url = https://github.com/eigenteam/eigen-git-mirror
