@@ -23,7 +23,7 @@ for f in local_filenames:
 traj.collect()
 
 # define landmarks as signatures with large clusters
-traj.prune(mode='clustersize',min_freq=3)
+traj.prune(size_thresh=3)
 
 # compute distances between neighborhood graphs
 traj.computeDists()
