@@ -46,7 +46,7 @@ class DMap:
         d = np.exp(-dists**2/(2.*self.epsilon))
         inv_rsum = 1./np.sum(d,axis=1)
         d *= inv_rsum.reshape(-1,1)
-        loc = np.matmul( d, self.eigenvec ) / self.eigenval
+        loc = np.matmul( d, self.evecs ) / self.evals
         return loc
     def build(self,dists,landmarks=None,
               valid_cols=None,
