@@ -34,9 +34,8 @@ make install
 ### Prerequisites
 
  * Required:
-     * [PyDMap](https://github.com/awlong/DiffusionMap)
      * Python >= 2.7
-     * numpy >= 1.7
+     * numpy >= 1.10.0
      * scipy >= 1.0.0
      * CMake >= 3.1.0
      * C++11 compliant compiler
@@ -49,7 +48,7 @@ make install
 
 ### Testing
 
-All code is unit-tested at the Python level. To run all tests from the build directory,
+Some (not all) classes are unit-tested at the Python level. To run all tests from the build directory,
 
 ```bash
 make test
