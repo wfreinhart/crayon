@@ -23,13 +23,16 @@ for f in local_filenames:
 traj.collect()
 
 # define landmarks as signatures with large clusters
-traj.prune(size_pct=90)
+traj.prune(size_pct=90, random=100)
 
 # compute distances between neighborhood graphs
 traj.computeDists()
 
+# detect outliers using agglomerative clustering
+traj.detectOutliers(mode='agglomerative')
+
 # take distances to a power <1 to exaggerate polymorphs
-traj.dmap.alpha = 0.5
+traj.dmap.alpha = 0.50
 
 # build diffusion map from distance matrix
 traj.buildDMap()

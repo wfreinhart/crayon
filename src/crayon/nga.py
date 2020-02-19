@@ -277,10 +277,10 @@ class Ensemble:
             self.lm_idx = np.hstack((self.lm_idx,np.argwhere(self.library.sizes >= np.percentile(self.library.counts,size_pct)).flatten()))
         self.lm_idx = np.unique(self.lm_idx)
         if random is not None:
-            remaining = range(len(vals))
+            remaining = [x for x in range(len(self.library.sigs))]
             for idx in self.lm_idx:
                 remaining.remove(idx)
-            random = np.random.choice(remaining,num_random)
+            random = np.random.choice(remaining,random)
             self.lm_idx = np.unique(np.hstack((self.lm_idx,random)))
         self.lm_idx = np.unique(self.lm_idx)
         n = len(self.library.sigs)
